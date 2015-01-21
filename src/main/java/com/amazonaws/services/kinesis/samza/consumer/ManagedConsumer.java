@@ -8,7 +8,7 @@
  * or implied. See the License for the specific language governing permissions
  * and limitations under the License.
  */
-package com.amazonaws.services.kinesis.consumer;
+package com.amazonaws.services.kinesis.samza.consumer;
 
 import java.net.NetworkInterface;
 import java.util.UUID;
@@ -24,8 +24,8 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-import com.amazonaws.services.kinesis.processor.ManagedClientProcessor;
-import com.amazonaws.services.kinesis.processor.ManagedClientProcessorFactory;
+import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessor;
+import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessorFactory;
 
 public class ManagedConsumer {
     private static final String version = ".9.0";
