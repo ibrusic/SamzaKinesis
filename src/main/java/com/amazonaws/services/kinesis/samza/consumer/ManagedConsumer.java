@@ -12,10 +12,8 @@ package com.amazonaws.services.kinesis.samza.consumer;
 
 import java.net.NetworkInterface;
 import java.util.UUID;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.Region;
@@ -27,7 +25,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessor;
 import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessorFactory;
 
-public class ManagedConsumer {
+public class ManagedConsumer implements Runnable {
     private static final String version = ".9.0";
 
     private static final Log LOG = LogFactory.getLog(ManagedConsumer.class);
@@ -56,7 +54,16 @@ public class ManagedConsumer {
         this.templateProcessor = templateProcessor;
     }
 
-    public int run() throws Exception {
+    @Override
+    public void run() {
+        try {
+            runWorker();
+        } catch (Exception e) {
+            LOG.error("Error in worker loop", e);
+        }
+    }    
+
+    public int runWorker() throws Exception {
         configure();
 
         System.out.println(String.format("Starting %s", appName));
