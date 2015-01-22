@@ -57,6 +57,9 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         if (this.templateProcessor == null) {
             this.templateProcessor = new SamzaPushClientProcessor(systemStreamPartition, this);
         }
+
+        // add a null processor to the stream partition map
+        this.processors.put(systemStreamPartition, null);
     }
 
     /**
@@ -66,7 +69,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     public void start() {
         for (Map.Entry<SystemStreamPartition, ManagedClientProcessor> entry : processors.entrySet()) {
             ManagedConsumer consumer = new ManagedConsumer(entry.getKey().getStream(),
-                    config.get("job.name"), entry.getValue());
+                    config.get("job.name"), this.templateProcessor);
             Thread thread = new Thread(consumer);
             thread.start();
             threads.put(entry.getKey(), thread);
