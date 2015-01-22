@@ -12,8 +12,11 @@ package com.amazonaws.services.kinesis.samza.consumer;
 
 import java.net.NetworkInterface;
 import java.util.UUID;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.samza.system.SystemStreamPartition;
+
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.Region;
@@ -47,11 +50,14 @@ public class ManagedConsumer implements Runnable {
 
     private ManagedClientProcessor templateProcessor;
 
+    private SystemStreamPartition systemStreamPartition;
+
     public ManagedConsumer(String streamName, String appName,
             ManagedClientProcessor templateProcessor) {
         this.streamName = streamName;
         this.appName = appName;
         this.templateProcessor = templateProcessor;
+        this.systemStreamPartition = systemStreamPartition;
     }
 
     @Override
@@ -61,7 +67,7 @@ public class ManagedConsumer implements Runnable {
         } catch (Exception e) {
             LOG.error("Error in worker loop", e);
         }
-    }    
+    }
 
     public int runWorker() throws Exception {
         configure();
