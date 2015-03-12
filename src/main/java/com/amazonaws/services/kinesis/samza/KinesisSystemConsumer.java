@@ -1,9 +1,13 @@
 package com.amazonaws.services.kinesis.samza;
 
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.samza.checkpoint.Checkpoint;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemConsumer;
@@ -35,6 +39,10 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     /** One processor per Kinesis shard that we start consuming. Key is shardId. */
     private Map<String, ManagedClientProcessor> processors =
             new HashMap<String, ManagedClientProcessor>();
+
+    /** List of message sequence numbers delivered since the last checkpoint. */
+    private Map<SystemStreamPartition, Queue<Delivery>> deliveries =
+            new HashMap<SystemStreamPartition, Queue<Delivery>>();
 
     private Map<SystemStreamPartition, Thread> threads = new HashMap<SystemStreamPartition, Thread>();
 
@@ -89,11 +97,47 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * and the Samza container will pick it up from there when polling for new
      * messages.
      */
-    public void putMessage(IncomingMessageEnvelope envelope) {
+    public synchronized void putMessage(SamzaPushClientProcessor caller,
+                                        IncomingMessageEnvelope envelope) {
+        if (!deliveries.containsKey(envelope.getSystemStreamPartition())) {
+            deliveries.put(envelope.getSystemStreamPartition(), new LinkedList<Delivery>());
+        }
+
+        Queue<Delivery> queue = deliveries.get(envelope.getSystemStreamPartition());
+        queue.add(new Delivery(envelope.getOffset(), caller));
+
         try {
             put(envelope.getSystemStreamPartition(), envelope);
         } catch (InterruptedException e) {
             LOG.info("Interrupted while enqueueing message", e);
+        }
+    }
+
+    /**
+     * Translates a Samza checkpoint into Kinesis Client Library checkpoints.
+     */
+    public synchronized void checkpoint(Checkpoint checkpoint) throws Exception {
+        for (Map.Entry<SystemStreamPartition, String> entry : checkpoint.getOffsets().entrySet()) {
+            Queue<Delivery> queue = deliveries.get(entry.getKey());
+            if (queue == null) continue;
+
+            HashMap<SamzaPushClientProcessor, String> latestSeqNos =
+                    new HashMap<SamzaPushClientProcessor, String>();
+            Delivery delivery;
+
+            // Go through the history of messages delivered since the last checkpoint.
+            // Find the most recent sequence number for each processor. Stop when
+            // either the queue is empty or the current checkpoint is reached.
+            while (true) {
+                delivery = queue.poll();
+                if (delivery == null) break;
+                latestSeqNos.put(delivery.processor, delivery.sequenceNumber);
+                if (delivery.sequenceNumber.equals(entry.getValue())) break;
+            }
+
+            for (Map.Entry<SamzaPushClientProcessor, String> seqNo : latestSeqNos.entrySet()) {
+                seqNo.getKey().checkpoint(seqNo.getValue());
+            }
         }
     }
 
@@ -107,5 +151,16 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     public void registerProcessor(String shardId, ManagedClientProcessor processor) {
         processors.put(shardId, processor);
+    }
+
+
+    private static class Delivery {
+        private final String sequenceNumber;
+        private final SamzaPushClientProcessor processor;
+
+        public Delivery(String sequenceNumber, SamzaPushClientProcessor processor) {
+            this.sequenceNumber = sequenceNumber;
+            this.processor = processor;
+        }
     }
 }

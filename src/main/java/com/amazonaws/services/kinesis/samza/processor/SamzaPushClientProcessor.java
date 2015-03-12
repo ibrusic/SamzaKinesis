@@ -60,7 +60,7 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
 
             IncomingMessageEnvelope envelope = new IncomingMessageEnvelope(stream,
                     record.getSequenceNumber(), key, data);
-            consumer.putMessage(envelope);
+            consumer.putMessage(this, envelope);
         }
     }
 
@@ -78,6 +78,7 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
      * for a stream has been delivered to the relevant task
      */
     public void checkpoint(String sequence) throws Exception {
+        // TODO needs retry on failure? see ManagedClientProcessor.checkpoint()
         checkpointer.checkpoint(sequence);
     }
 }
