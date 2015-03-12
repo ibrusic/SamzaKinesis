@@ -2,7 +2,6 @@ package com.amazonaws.services.kinesis.samza;
 
 import java.util.HashMap;
 import java.util.Map;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.config.Config;
@@ -10,8 +9,6 @@ import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemConsumer;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
-
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
 import com.amazonaws.services.kinesis.samza.consumer.ManagedConsumer;
 import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessor;
 import com.amazonaws.services.kinesis.samza.processor.SamzaPushClientProcessor;
@@ -29,11 +26,17 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
     private final Config config;
 
-    private Map<SystemStreamPartition, ManagedClientProcessor> processors = new HashMap<SystemStreamPartition, ManagedClientProcessor>();
+    /** One processor per Samza partition (and since we try to use one partition per
+     * container, this map is normally expected to have one entry). This processor
+     * is copied every time a new shard is started. */
+    private Map<SystemStreamPartition, ManagedClientProcessor> templateProcessors =
+            new HashMap<SystemStreamPartition, ManagedClientProcessor>();
+
+    /** One processor per Kinesis shard that we start consuming. Key is shardId. */
+    private Map<String, ManagedClientProcessor> processors =
+            new HashMap<String, ManagedClientProcessor>();
 
     private Map<SystemStreamPartition, Thread> threads = new HashMap<SystemStreamPartition, Thread>();
-
-    private ManagedClientProcessor templateProcessor = null;
 
     public KinesisSystemConsumer(String systemName, Config config) {
         this.systemName = systemName;
@@ -54,12 +57,8 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     public void register(SystemStreamPartition systemStreamPartition, String offset) {
         super.register(systemStreamPartition, offset);
 
-        if (this.templateProcessor == null) {
-            this.templateProcessor = new SamzaPushClientProcessor(systemStreamPartition, this);
-        }
-
-        // add a null processor to the stream partition map
-        this.processors.put(systemStreamPartition, null);
+        ManagedClientProcessor processor = new SamzaPushClientProcessor(systemStreamPartition, this);
+        this.templateProcessors.put(systemStreamPartition, processor);
     }
 
     /**
@@ -67,9 +66,9 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     @Override
     public void start() {
-        for (Map.Entry<SystemStreamPartition, ManagedClientProcessor> entry : processors.entrySet()) {
+        for (Map.Entry<SystemStreamPartition, ManagedClientProcessor> entry : templateProcessors.entrySet()) {
             ManagedConsumer consumer = new ManagedConsumer(entry.getKey().getStream(),
-                    config.get("job.name"), this.templateProcessor);
+                    config.get("job.name"), entry.getValue());
             Thread thread = new Thread(consumer);
             thread.start();
             threads.put(entry.getKey(), thread);
@@ -99,14 +98,14 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     }
 
     /**
-     * Called by a {@link SamzaPushClientProcessor} on startup to register the
-     * instance of the processor with the System
+     * Called by a {@link SamzaPushClientProcessor} when it starts consuming
+     * messages from a new Kinesis shard. (Each shard gets its own processor
+     * instance.)
      * 
-     * @param systemStreamPartition
-     * @param processor
+     * @param shardId Kinesis identifier of the shard that's being consumed.
+     * @param processor IRecordProcessor instance for that shard.
      */
-    public void registerProcessor(SystemStreamPartition systemStreamPartition,
-            ManagedClientProcessor processor) {
-        processors.put(systemStreamPartition, processor);
+    public void registerProcessor(String shardId, ManagedClientProcessor processor) {
+        processors.put(shardId, processor);
     }
 }

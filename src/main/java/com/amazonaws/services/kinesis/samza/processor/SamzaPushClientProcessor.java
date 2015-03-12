@@ -41,9 +41,7 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
     @Override
     public void initialize(String shardId) {
         super.initialize(shardId);
-
-        // register this processor instance with the enclosing consumer.
-        consumer.registerProcessor(this.stream, this);
+        consumer.registerProcessor(shardId, this);
     }
 
     /**
