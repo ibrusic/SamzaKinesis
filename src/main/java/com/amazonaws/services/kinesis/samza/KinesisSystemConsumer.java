@@ -151,8 +151,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     public void registerProcessor(String shardId, ManagedKinesisClientProcessor processor) {
         processors.put(shardId, processor);
-    }
-
+	}
 
     private static class Delivery {
         private final String sequenceNumber;
