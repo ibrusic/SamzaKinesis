@@ -23,7 +23,7 @@ import com.amazonaws.services.kinesis.samza.KinesisSystemConsumer;
  * {@link KinesisSystemConsumer} where they are placed on a queue of messages to
  * be delivered to the application.
  */
-public class SamzaPushClientProcessor extends ManagedClientProcessor {
+public class SamzaPushKinesisClientProcessor extends ManagedKinesisClientProcessor {
 
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
@@ -33,7 +33,7 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
 
     private IRecordProcessorCheckpointer checkpointer = null;
 
-    public SamzaPushClientProcessor(SystemStreamPartition stream, KinesisSystemConsumer consumer) {
+    public SamzaPushKinesisClientProcessor(SystemStreamPartition stream, KinesisSystemConsumer consumer) {
         this.stream = stream;
         this.consumer = consumer;
     }
@@ -69,8 +69,8 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
      * of this class, initialized appropriately.
      */
     @Override
-    public ManagedClientProcessor copy() throws Exception {
-        return new SamzaPushClientProcessor(stream, consumer);
+    public ManagedKinesisClientProcessor copy() throws Exception {
+        return new SamzaPushKinesisClientProcessor(stream, consumer);
     }
 
     /**
@@ -78,7 +78,7 @@ public class SamzaPushClientProcessor extends ManagedClientProcessor {
      * for a stream has been delivered to the relevant task
      */
     public void checkpoint(String sequence) throws Exception {
-        // TODO needs retry on failure? see ManagedClientProcessor.checkpoint()
+        // TODO needs retry on failure? see ManagedKinesisClientProcessor.checkpoint()
         checkpointer.checkpoint(sequence);
     }
 }

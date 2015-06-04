@@ -24,8 +24,8 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
-public abstract class ManagedClientProcessor implements IRecordProcessor {
-    private static final Log LOG = LogFactory.getLog(ManagedClientProcessor.class);
+public abstract class ManagedKinesisClientProcessor implements IRecordProcessor {
+    private static final Log LOG = LogFactory.getLog(ManagedKinesisClientProcessor.class);
 
     private final int NUM_RETRIES = 10;
 
@@ -55,7 +55,7 @@ public abstract class ManagedClientProcessor implements IRecordProcessor {
     public abstract void processRecords(List<Record> records,
             IRecordProcessorCheckpointer checkpointer);
 
-    public abstract ManagedClientProcessor copy() throws Exception;
+    public abstract ManagedKinesisClientProcessor copy() throws Exception;
 
     /**
      * {@inheritDoc}
@@ -65,8 +65,8 @@ public abstract class ManagedClientProcessor implements IRecordProcessor {
         LOG.info("Shutting down record processor for shard: " + kinesisShardId);
 
         // notify the factory that created this processor of shutdown
-        if (this.createdByFactory instanceof ManagedClientProcessorFactory) {
-            ((ManagedClientProcessorFactory) this.createdByFactory).notifyOfShutdown(this);
+        if (this.createdByFactory instanceof ManagedKinesisClientProcessorFactory) {
+            ((ManagedKinesisClientProcessorFactory) this.createdByFactory).notifyOfShutdown(this);
         }
 
         // Important to checkpoint after reaching end of shard, so we can start

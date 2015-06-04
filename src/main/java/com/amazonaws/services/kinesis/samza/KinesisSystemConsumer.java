@@ -2,9 +2,12 @@ package com.amazonaws.services.kinesis.samza;
 
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+
+import com.amazonaws.services.kinesis.samza.consumer.SamzaManagedKinesisConsumer;
+import com.amazonaws.services.kinesis.samza.processor.ManagedKinesisClientProcessor;
+import com.amazonaws.services.kinesis.samza.processor.SamzaPushKinesisClientProcessor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.checkpoint.Checkpoint;
@@ -13,9 +16,6 @@ import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemConsumer;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
-import com.amazonaws.services.kinesis.samza.consumer.ManagedConsumer;
-import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessor;
-import com.amazonaws.services.kinesis.samza.processor.SamzaPushClientProcessor;
 
 /**
  * Implements the Samza {@link SystemConsumer} interface using a queue. The
@@ -33,12 +33,12 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     /** One processor per Samza partition (and since we try to use one partition per
      * container, this map is normally expected to have one entry). This processor
      * is copied every time a new shard is started. */
-    private Map<SystemStreamPartition, ManagedClientProcessor> templateProcessors =
-            new HashMap<SystemStreamPartition, ManagedClientProcessor>();
+    private Map<SystemStreamPartition, ManagedKinesisClientProcessor> templateProcessors =
+            new HashMap<SystemStreamPartition, ManagedKinesisClientProcessor>();
 
     /** One processor per Kinesis shard that we start consuming. Key is shardId. */
-    private Map<String, ManagedClientProcessor> processors =
-            new HashMap<String, ManagedClientProcessor>();
+    private Map<String, ManagedKinesisClientProcessor> processors =
+            new HashMap<String, ManagedKinesisClientProcessor>();
 
     /** List of message sequence numbers delivered since the last checkpoint. */
     private Map<SystemStreamPartition, Queue<Delivery>> deliveries =
@@ -65,7 +65,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     public void register(SystemStreamPartition systemStreamPartition, String offset) {
         super.register(systemStreamPartition, offset);
 
-        ManagedClientProcessor processor = new SamzaPushClientProcessor(systemStreamPartition, this);
+        ManagedKinesisClientProcessor processor = new SamzaPushKinesisClientProcessor(systemStreamPartition, this);
         this.templateProcessors.put(systemStreamPartition, processor);
     }
 
@@ -74,8 +74,8 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     @Override
     public void start() {
-        for (Map.Entry<SystemStreamPartition, ManagedClientProcessor> entry : templateProcessors.entrySet()) {
-            ManagedConsumer consumer = new ManagedConsumer(entry.getKey().getStream(),
+        for (Map.Entry<SystemStreamPartition, ManagedKinesisClientProcessor> entry : templateProcessors.entrySet()) {
+            SamzaManagedKinesisConsumer consumer = new SamzaManagedKinesisConsumer(entry.getKey().getStream(),
                     config.get("job.name"), entry.getValue());
             Thread thread = new Thread(consumer);
             thread.start();
@@ -85,19 +85,19 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
     @Override
     public void stop() {
-        // TODO Make this more graceful. Perhaps ManagedConsumer should expose
+        // TODO Make this more graceful. Perhaps SamzaManagedKinesisConsumer should expose
         // Worker.shutdown() to us.
         for (Thread thread : threads.values())
             thread.interrupt();
     }
 
     /**
-     * Called by a {@link SamzaPushClientProcessor} when a message has been
+     * Called by a {@link com.amazonaws.services.kinesis.samza.processor.SamzaPushKinesisClientProcessor} when a message has been
      * received from an incoming Kinesis stream. The message is put on a queue,
      * and the Samza container will pick it up from there when polling for new
      * messages.
      */
-    public synchronized void putMessage(SamzaPushClientProcessor caller,
+    public synchronized void putMessage(SamzaPushKinesisClientProcessor caller,
                                         IncomingMessageEnvelope envelope) {
         if (!deliveries.containsKey(envelope.getSystemStreamPartition())) {
             deliveries.put(envelope.getSystemStreamPartition(), new LinkedList<Delivery>());
@@ -121,8 +121,8 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
             Queue<Delivery> queue = deliveries.get(entry.getKey());
             if (queue == null) continue;
 
-            HashMap<SamzaPushClientProcessor, String> latestSeqNos =
-                    new HashMap<SamzaPushClientProcessor, String>();
+            HashMap<SamzaPushKinesisClientProcessor, String> latestSeqNos =
+                    new HashMap<SamzaPushKinesisClientProcessor, String>();
             Delivery delivery;
 
             // Go through the history of messages delivered since the last checkpoint.
@@ -135,30 +135,30 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
                 if (delivery.sequenceNumber.equals(entry.getValue())) break;
             }
 
-            for (Map.Entry<SamzaPushClientProcessor, String> seqNo : latestSeqNos.entrySet()) {
+            for (Map.Entry<SamzaPushKinesisClientProcessor, String> seqNo : latestSeqNos.entrySet()) {
                 seqNo.getKey().checkpoint(seqNo.getValue());
             }
         }
     }
 
     /**
-     * Called by a {@link SamzaPushClientProcessor} when it starts consuming
+     * Called by a {@link com.amazonaws.services.kinesis.samza.processor.SamzaPushKinesisClientProcessor} when it starts consuming
      * messages from a new Kinesis shard. (Each shard gets its own processor
      * instance.)
      * 
      * @param shardId Kinesis identifier of the shard that's being consumed.
      * @param processor IRecordProcessor instance for that shard.
      */
-    public void registerProcessor(String shardId, ManagedClientProcessor processor) {
+    public void registerProcessor(String shardId, ManagedKinesisClientProcessor processor) {
         processors.put(shardId, processor);
     }
 
 
     private static class Delivery {
         private final String sequenceNumber;
-        private final SamzaPushClientProcessor processor;
+        private final SamzaPushKinesisClientProcessor processor;
 
-        public Delivery(String sequenceNumber, SamzaPushClientProcessor processor) {
+        public Delivery(String sequenceNumber, SamzaPushKinesisClientProcessor processor) {
             this.sequenceNumber = sequenceNumber;
             this.processor = processor;
         }

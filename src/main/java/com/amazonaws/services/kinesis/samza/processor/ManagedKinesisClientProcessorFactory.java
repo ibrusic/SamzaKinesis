@@ -15,7 +15,6 @@ import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.samza.system.SystemStreamPartition;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
@@ -24,15 +23,15 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
  * Simple factory class to generate a standalone Kinesis Aggregator
  * IRecordProcessor for the application
  */
-public class ManagedClientProcessorFactory implements IRecordProcessorFactory {
+public class ManagedKinesisClientProcessorFactory implements IRecordProcessorFactory {
 
     private static Map<String, Object> createdProcessors = new HashMap<String, Object>();
 
-    private final Log LOG = LogFactory.getLog(ManagedClientProcessorFactory.class);
+    private final Log LOG = LogFactory.getLog(ManagedKinesisClientProcessorFactory.class);
 
-    private ManagedClientProcessor managedProcessor;
+    private ManagedKinesisClientProcessor managedProcessor;
 
-    public ManagedClientProcessorFactory(ManagedClientProcessor managedProcessor) {
+    public ManagedKinesisClientProcessorFactory(ManagedKinesisClientProcessor managedProcessor) {
         this.managedProcessor = managedProcessor;
     }
 
@@ -42,7 +41,7 @@ public class ManagedClientProcessorFactory implements IRecordProcessorFactory {
     public IRecordProcessor createProcessor() {
         try {
             LOG.info("Creating new Managed Client Processor");
-            ManagedClientProcessor p = this.managedProcessor.copy();
+            ManagedKinesisClientProcessor p = this.managedProcessor.copy();
             createdProcessors.put(p.toString(), p);
             return p;
         } catch (Exception e) {

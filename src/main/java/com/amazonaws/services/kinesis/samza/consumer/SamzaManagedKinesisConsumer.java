@@ -13,6 +13,7 @@ package com.amazonaws.services.kinesis.samza.consumer;
 import java.net.NetworkInterface;
 import java.util.UUID;
 
+import com.amazonaws.services.kinesis.samza.processor.ManagedKinesisClientProcessorFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.system.SystemStreamPartition;
@@ -25,13 +26,12 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessor;
-import com.amazonaws.services.kinesis.samza.processor.ManagedClientProcessorFactory;
+import com.amazonaws.services.kinesis.samza.processor.ManagedKinesisClientProcessor;
 
-public class ManagedConsumer implements Runnable {
+public class SamzaManagedKinesisConsumer implements Runnable {
     private static final String version = ".9.0";
 
-    private static final Log LOG = LogFactory.getLog(ManagedConsumer.class);
+    private static final Log LOG = LogFactory.getLog(SamzaManagedKinesisConsumer.class);
 
     private String streamName, appName, regionName, environmentName, positionInStream,
             kinesisEndpoint;
@@ -48,12 +48,12 @@ public class ManagedConsumer implements Runnable {
 
     private boolean isConfigured = false;
 
-    private ManagedClientProcessor templateProcessor;
+    private ManagedKinesisClientProcessor templateProcessor;
 
     private SystemStreamPartition systemStreamPartition;
 
-    public ManagedConsumer(String streamName, String appName,
-            ManagedClientProcessor templateProcessor) {
+    public SamzaManagedKinesisConsumer(String streamName, String appName,
+                                       ManagedKinesisClientProcessor templateProcessor) {
         this.streamName = streamName;
         this.appName = appName;
         this.templateProcessor = templateProcessor;
@@ -75,7 +75,7 @@ public class ManagedConsumer implements Runnable {
         System.out.println(String.format("Starting %s", appName));
         LOG.info(String.format("Running %s to process stream %s", appName, streamName));
 
-        IRecordProcessorFactory recordProcessorFactory = new ManagedClientProcessorFactory(
+        IRecordProcessorFactory recordProcessorFactory = new ManagedKinesisClientProcessorFactory(
                 this.templateProcessor);
         Worker worker = new Worker(recordProcessorFactory, this.config);
 
@@ -180,37 +180,37 @@ public class ManagedConsumer implements Runnable {
         }
     }
 
-    public ManagedConsumer withKinesisEndpoint(String kinesisEndpoint) {
+    public SamzaManagedKinesisConsumer withKinesisEndpoint(String kinesisEndpoint) {
         this.kinesisEndpoint = kinesisEndpoint;
         return this;
     }
 
-    public ManagedConsumer withToleratedWorkerFailures(int failuresToTolerate) {
+    public SamzaManagedKinesisConsumer withToleratedWorkerFailures(int failuresToTolerate) {
         this.failuresToTolerate = failuresToTolerate;
         return this;
     }
 
-    public ManagedConsumer withMaxRecords(int maxRecords) {
+    public SamzaManagedKinesisConsumer withMaxRecords(int maxRecords) {
         this.maxRecords = maxRecords;
         return this;
     }
 
-    public ManagedConsumer withRegionName(String regionName) {
+    public SamzaManagedKinesisConsumer withRegionName(String regionName) {
         this.regionName = regionName;
         return this;
     }
 
-    public ManagedConsumer withEnvironment(String environmentName) {
+    public SamzaManagedKinesisConsumer withEnvironment(String environmentName) {
         this.environmentName = environmentName;
         return this;
     }
 
-    public ManagedConsumer withCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
+    public SamzaManagedKinesisConsumer withCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
         this.credentialsProvider = credentialsProvider;
         return this;
     }
 
-    public ManagedConsumer withInitialPositionInStream(String positionInStream) {
+    public SamzaManagedKinesisConsumer withInitialPositionInStream(String positionInStream) {
         this.positionInStream = positionInStream;
         return this;
     }
