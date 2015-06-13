@@ -27,6 +27,9 @@ public class Constants {
 
     public static final String STREAM_POSITION_PARAM = "position-in-stream";
 
+    // Aws region parameter
+    public static final String AWS_REGION_PARAM = "aws-region";
+
     public static final String MAX_RECORDS_PARAM = "max-records";
 
     public static final String ENVIRONMENT_PARAM = "environment";

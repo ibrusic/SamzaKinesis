@@ -1,16 +1,12 @@
 package com.amazonaws.services.kinesis.samza;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.*;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,8 +30,9 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
     public static final String SAMPLE_APPLICATION_NAME = "kinesisApp";
 
-    private static AWSCredentialsProvider credentialsProvider;
+    private static AWSCredentialsProvider credentials;
     private final String appName;
+    private final String region;
 
     public static void main(String[] args) throws Exception {
         String path = "/Users/renatomarroquin/Documents/Libs/Amazon/rootkey.prod.csv";
@@ -48,43 +45,12 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         KinesisConsumerRunnable worker2 = new KinesisConsumerRunnable(SAMPLE_APPLICATION_NAME,
                 SAMPLE_APPLICATION_STREAM_NAME,
                 new ImplKinesisRecordProcessor(null, new KinesisSystemConsumer(SAMPLE_APPLICATION_NAME, conf)), "LATEST"
-        ).withCredentialsProvider(credentialsProvider);
+        ).withCredentialsProvider(credentials).withRegionName("us-west");
 
         Thread thread = new Thread(worker2);
         thread.start();
         Thread t2 = new Thread(worker2);
         t2.start();
-    }
-
-    private static void runAmazon() throws UnknownHostException {
-        credentialsProvider = new PropertiesFileCredentialsProvider("/Users/renatomarroquin/Documents/Libs/Amazon/rootkey.prod.csv");
-
-        String workerId = InetAddress.getLocalHost().getCanonicalHostName() + ":" + UUID.randomUUID();
-        KinesisClientLibConfiguration kinesisClientLibConfiguration =
-                new KinesisClientLibConfiguration(SAMPLE_APPLICATION_NAME,
-                        SAMPLE_APPLICATION_STREAM_NAME,
-                        credentialsProvider,
-                        workerId);
-        kinesisClientLibConfiguration.withInitialPositionInStream(SAMPLE_APPLICATION_INITIAL_POSITION_IN_STREAM);
-
-//        IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory();
-        IRecordProcessorFactory recordProcessorFactory = new KinesisRecordProcessorFactory(new ImplKinesisRecordProcessor(null, new KinesisSystemConsumer("System", null)));
-        Worker worker = new Worker(recordProcessorFactory, kinesisClientLibConfiguration);
-
-        System.out.printf("Running %s to process stream %s as worker %s...\n",
-                SAMPLE_APPLICATION_NAME,
-                SAMPLE_APPLICATION_STREAM_NAME,
-                workerId);
-
-        int exitCode = 0;
-        try {
-            worker.run();
-        } catch (Throwable t) {
-            System.err.println("Caught throwable while processing data.");
-            t.printStackTrace();
-            exitCode = 1;
-        }
-        System.exit(exitCode);
     }
 
     private static final Log LOG = LogFactory.getLog(KinesisSystemConsumer.class);
@@ -124,6 +90,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
     /**
      * Constructor
+     *
      * @param systemName
      * @param config
      */
@@ -131,14 +98,31 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         System.out.println(config);
         String awsCredentialsPath = config.get(String.format("systems.%s.%s", systemName, CONFIG_PATH_PARAM));
         String iniPos = config.get(String.format("systems.%s.%s", systemName, STREAM_POSITION_PARAM));
+        String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));
         String appName = config.get("job.name");
         this.systemName = systemName;
         this.config = config;
         this.appName = appName;
         this.initialPos = iniPos;
+        this.region = region;
+        loadAwsCredentials(awsCredentialsPath);
+    }
 
-        credentialsProvider = awsCredentialsPath == null ? new DefaultAWSCredentialsProviderChain() :
-                new PropertiesFileCredentialsProvider(awsCredentialsPath);
+    /**
+     * Tries loading AwsCredentials.
+     *
+     * @param awsCredentialsPath
+     */
+    private void loadAwsCredentials(String awsCredentialsPath) {
+        try {
+            credentials = awsCredentialsPath == null ? new DefaultAWSCredentialsProviderChain() :
+                    new PropertiesFileCredentialsProvider(awsCredentialsPath);
+        } catch (Exception e) {
+            throw new AmazonClientException(
+                    "Cannot load the credentials from provided path. " +
+                            "Check your credential profiles file (~/.aws/credentials), or the provided path.",
+                    e);
+        }
     }
 
     /**
@@ -165,11 +149,11 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     public void start() {
         for (Map.Entry<SystemStreamPartition, AbstractKinesisRecordProcessor> entry : templateProcessors.entrySet()) {
             // TODO right now number of shards are specified in conf file, but they could be obtained from Amazon.
-            String [] streamShards = entry.getKey().getStream().split("#");
+            String[] streamShards = entry.getKey().getStream().split("#");
             if (streamShards.length == 2) {
                 int numShards = Integer.parseInt(streamShards[1]);
                 LOG.info(String.format("Creating %d threads for %s stream.", numShards, streamShards[0]));
-                for (int cnt = 0; cnt < numShards; cnt ++){
+                for (int cnt = 0; cnt < numShards; cnt++) {
                     createKinesisConsumerThread(entry.getKey(), streamShards[0], entry.getValue());
                 }
             } else {
@@ -181,6 +165,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
     /**
      * Creates Kinesis consumer thread
+     *
      * @param ssp
      * @param streamName
      * @param processor
@@ -188,7 +173,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     private void createKinesisConsumerThread(SystemStreamPartition ssp, String streamName, AbstractKinesisRecordProcessor processor) {
         LOG.info(String.format("Thread created for partition %s ", ssp.toString()));
         KinesisConsumerRunnable consumer = new KinesisConsumerRunnable(this.appName,
-                streamName, processor, this.initialPos).withCredentialsProvider(credentialsProvider);
+                streamName, processor, this.initialPos).withCredentialsProvider(credentials).withRegionName(region);
         Thread thread = new Thread(consumer);
         thread.start();
         threads.put(ssp, thread);
