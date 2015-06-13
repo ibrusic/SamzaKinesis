@@ -19,12 +19,10 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.model.CreateStreamRequest;
 import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
@@ -63,19 +61,21 @@ public class AmazonKinesisRecordProducerSample {
 //        }
         credentialsProvider = new PropertiesFileCredentialsProvider("/Users/renatomarroquin/Documents/Libs/Amazon/rootkey.prod.csv");
         kinesis = new AmazonKinesisClient(credentialsProvider);//credentials);
+        kinesis.configureRegion(Regions.US_EAST_1);
     }
 
     public static void main(String[] args) throws Exception {
         init();
 
         final String myStreamName = SAMPLE_APPLICATION_STREAM_NAME;
-        final Integer myStreamSize = 1;
+        final Integer myStreamSize = 2;
 
         // Describe the stream and check if it exists.
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest().withStreamName(myStreamName);
         try {
             StreamDescription streamDescription = kinesis.describeStream(describeStreamRequest).getStreamDescription();
             System.out.printf("Stream %s has a status of %s.\n", myStreamName, streamDescription.getStreamStatus());
+            System.out.printf("Stream %s has %d shards.\n", myStreamName, streamDescription.getShards().size());
 
             if ("DELETING".equals(streamDescription.getStreamStatus())) {
                 System.out.println("Stream is being deleted. This sample will now exit.");
@@ -91,8 +91,10 @@ public class AmazonKinesisRecordProducerSample {
 
             // Create a stream. The number of shards determines the provisioned throughput.
             CreateStreamRequest createStreamRequest = new CreateStreamRequest();
+
             createStreamRequest.setStreamName(myStreamName);
             createStreamRequest.setShardCount(myStreamSize);
+
             kinesis.createStream(createStreamRequest);
             // The stream is now being created. Wait for it to become active.
             waitForStreamToBecomeAvailable(myStreamName);
@@ -120,12 +122,14 @@ public class AmazonKinesisRecordProducerSample {
         System.out.printf("Putting records in stream : %s until this application is stopped...\n", myStreamName);
         System.out.println("Press CTRL-C to stop.");
         // Write records to the stream until this program is aborted.
+        int cnt = 0;
         while (true) {
+            cnt++;
             long createTime = System.currentTimeMillis();
             PutRecordRequest putRecordRequest = new PutRecordRequest();
             putRecordRequest.setStreamName(myStreamName);
             putRecordRequest.setData(ByteBuffer.wrap(String.format("testData-%d", createTime).getBytes()));
-            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", createTime));
+            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt%2));
             PutRecordResult putRecordResult = kinesis.putRecord(putRecordRequest);
             System.out.printf("Successfully put record, partition key : %s, ShardID : %s, SequenceNumber : %s.\n",
                     putRecordRequest.getPartitionKey(),
