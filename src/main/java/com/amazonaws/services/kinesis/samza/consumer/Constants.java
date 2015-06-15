@@ -16,14 +16,18 @@
  */
 package com.amazonaws.services.kinesis.samza.consumer;
 
-import org.omg.CORBA.PUBLIC_MEMBER;
-
 public class Constants {
+    public static final String CONFIG_URL_PARAM = "config-file-url";
+
     public static final String CONFIG_PATH_PARAM = "config-file-path";
 
     public static final String STREAM_NAME_PARAM = "stream-name";
 
-    public static final String APP_NAME_PARAM = "job.name";
+    public static final String NAMESPACE_PARAM = "namespace";
+
+    public static final String APP_NAME_PARAM = "application-name";
+
+    public static final String REGION_PARAM = "region";
 
     public static final String STREAM_POSITION_PARAM = "position-in-stream";
 
@@ -31,16 +35,6 @@ public class Constants {
 
     public static final String ENVIRONMENT_PARAM = "environment";
 
-    // Default failures to be tolerated when reading from a kinesis stream
     public static final String FAILURES_TOLERATED_PARAM = "failures-tolerated";
-    public static final int DEFAULT_FAILURES_TOLERATED = -1;
 
-    // Default number of checkpoint retires
-    public static final int DEFAULT_NUM_RETRIES = 10;
-
-    // Backoff time when trying to checkpoint
-    public static final long DEFAULT_BACKOFF_TIME_IN_MILLIS = 100L;
-
-    // Default max number of recors to be consumed
-    public static final int DEFAULT_MAX_RECORDS = -1;
 }

@@ -33,14 +33,14 @@ public class KinesisCheckpointManager implements CheckpointManager {
             systemNames.add(ssp.getSystem());
         }
 
-//        try {
-//            for (String systemName : systemNames) {
-//                KinesisSystemFactory.getConsumerBySystemName(systemName).checkpoint(checkpoint);
-//            }
-//        } catch (Exception e) {
-//            // TODO handle this properly
-//            LOG.error("Cannot write checkpoint", e);
-//        }
+        try {
+            for (String systemName : systemNames) {
+                KinesisSystemFactory.getConsumerBySystemName(systemName).checkpoint(checkpoint);
+            }
+        } catch (Exception e) {
+            // TODO handle this properly
+            LOG.error("Cannot write checkpoint", e);
+        }
     }
 
     @Override

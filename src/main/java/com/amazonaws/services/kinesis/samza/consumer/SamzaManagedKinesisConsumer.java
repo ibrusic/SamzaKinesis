@@ -8,13 +8,12 @@
  * or implied. See the License for the specific language governing permissions
  * and limitations under the License.
  */
-package com.amazonaws.services.kinesis.samza.consumer.kcl;
+package com.amazonaws.services.kinesis.samza.consumer;
 
-import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.UUID;
 
-import com.amazonaws.services.kinesis.samza.consumer.InvalidConfigurationException;
+import com.amazonaws.services.kinesis.samza.processor.ManagedKinesisClientProcessorFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.system.SystemStreamPartition;
@@ -27,70 +26,46 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
+import com.amazonaws.services.kinesis.samza.processor.ManagedKinesisClientProcessor;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.DEFAULT_FAILURES_TOLERATED;
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.DEFAULT_MAX_RECORDS;
-
-/**
- * Runnable class to consumer from Kinesis.
- */
-public class KinesisConsumerRunnable implements Runnable {
+public class SamzaManagedKinesisConsumer implements Runnable {
     private static final String version = ".9.0";
 
-    private static final Log LOG = LogFactory.getLog(KinesisConsumerRunnable.class);
+    private static final Log LOG = LogFactory.getLog(SamzaManagedKinesisConsumer.class);
 
-    /** Stream name */
-    private String streamName;
-    /** App name */
-    private String appName;
-    /** Region name */
-    private String regionName;
-    /** Environment name */
-    private String environmentName;
-    /** Partition inStream */
-    private String positionInStream;
-    /** Kinesis endPoint */
-    private String kinesisEndpoint;
+    private String streamName, appName, regionName, environmentName, positionInStream,
+            kinesisEndpoint;
 
     private AWSCredentialsProvider credentialsProvider;
 
     private InitialPositionInStream streamPosition;
 
-    private int failuresToTolerate = DEFAULT_FAILURES_TOLERATED;
+    private int failuresToTolerate = -1;
 
-    private int maxRecords = DEFAULT_MAX_RECORDS;
+    private int maxRecords = -1;
 
     private KinesisClientLibConfiguration config;
 
     private boolean isConfigured = false;
 
-    private AbstractKinesisRecordProcessor templateProcessor;
+    private ManagedKinesisClientProcessor templateProcessor;
 
     private SystemStreamPartition systemStreamPartition;
 
-    /**
-     * Constructor
-     * @param streamName
-     * @param appName
-     * @param processor
-     */
-    public KinesisConsumerRunnable(String appName, String streamName,
-                                   AbstractKinesisRecordProcessor processor, String streamPosition) {
-        this.appName = appName;
+    public SamzaManagedKinesisConsumer(String streamName, String appName,
+                                       ManagedKinesisClientProcessor templateProcessor) {
         this.streamName = streamName;
-        this.templateProcessor = processor;
-        this.positionInStream = streamPosition;
-        this.failuresToTolerate = DEFAULT_FAILURES_TOLERATED;
+        this.appName = appName;
+        this.templateProcessor = templateProcessor;
+        this.systemStreamPartition = systemStreamPartition;
     }
 
     @Override
     public void run() {
         try {
-           runWorker();
+            runWorker();
         } catch (Exception e) {
-            System.out.println("Error in worker loop");
             LOG.error("Error in worker loop", e);
-            e.printStackTrace();
         }
     }
 
@@ -100,17 +75,9 @@ public class KinesisConsumerRunnable implements Runnable {
         System.out.println(String.format("Starting %s", appName));
         LOG.info(String.format("Running %s to process stream %s", appName, streamName));
 
-        String workerId = InetAddress.getLocalHost().getCanonicalHostName() + ":" + UUID.randomUUID();
-        KinesisClientLibConfiguration kinesisClientLibConfiguration =
-                new KinesisClientLibConfiguration(appName,
-                        streamName,
-                        credentialsProvider,
-                        workerId);
-        kinesisClientLibConfiguration.withInitialPositionInStream(InitialPositionInStream.LATEST);
-
-        IRecordProcessorFactory recordProcessorFactory = new KinesisRecordProcessorFactory(this.templateProcessor);
-        Worker worker = new Worker(recordProcessorFactory, kinesisClientLibConfiguration);
-        worker.run();
+        IRecordProcessorFactory recordProcessorFactory = new ManagedKinesisClientProcessorFactory(
+                this.templateProcessor);
+        Worker worker = new Worker(recordProcessorFactory, this.config);
 
         int exitCode = 0;
         int failures = 0;
@@ -120,7 +87,6 @@ public class KinesisConsumerRunnable implements Runnable {
             try {
                 worker.run();
             } catch (Throwable t) {
-                System.out.println("error");
                 LOG.error("Caught throwable while processing data.", t);
 
                 failures++;
@@ -142,7 +108,6 @@ public class KinesisConsumerRunnable implements Runnable {
     }
 
     private void validateConfig() throws InvalidConfigurationException {
-        System.out.println("validating");
         try {
             assertThat(this.streamName != null, "Must Specify a Stream Name");
             assertThat(this.appName != null, "Must Specify an Application Name");
@@ -176,7 +141,6 @@ public class KinesisConsumerRunnable implements Runnable {
 
                 String workerId = NetworkInterface.getNetworkInterfaces() + ":" + UUID.randomUUID();
                 LOG.info("Using Worker ID: " + workerId);
-                System.out.println("Using Worker ID: " + workerId);
 
                 // obtain credentials using the default provider chain or the
                 // credentials provider supplied
@@ -184,9 +148,6 @@ public class KinesisConsumerRunnable implements Runnable {
                         : this.credentialsProvider;
 
                 LOG.info("Using credentials with Access Key ID: "
-                        + credentialsProvider.getCredentials().getAWSAccessKeyId());
-
-                System.out.println("Using credentials with Access Key ID: "
                         + credentialsProvider.getCredentials().getAWSAccessKeyId());
 
                 config = new KinesisClientLibConfiguration(appName, streamName,
@@ -219,37 +180,37 @@ public class KinesisConsumerRunnable implements Runnable {
         }
     }
 
-    public KinesisConsumerRunnable withKinesisEndpoint(String kinesisEndpoint) {
+    public SamzaManagedKinesisConsumer withKinesisEndpoint(String kinesisEndpoint) {
         this.kinesisEndpoint = kinesisEndpoint;
         return this;
     }
 
-    public KinesisConsumerRunnable withToleratedWorkerFailures(int failuresToTolerate) {
+    public SamzaManagedKinesisConsumer withToleratedWorkerFailures(int failuresToTolerate) {
         this.failuresToTolerate = failuresToTolerate;
         return this;
     }
 
-    public KinesisConsumerRunnable withMaxRecords(int maxRecords) {
+    public SamzaManagedKinesisConsumer withMaxRecords(int maxRecords) {
         this.maxRecords = maxRecords;
         return this;
     }
 
-    public KinesisConsumerRunnable withRegionName(String regionName) {
+    public SamzaManagedKinesisConsumer withRegionName(String regionName) {
         this.regionName = regionName;
         return this;
     }
 
-    public KinesisConsumerRunnable withEnvironment(String environmentName) {
+    public SamzaManagedKinesisConsumer withEnvironment(String environmentName) {
         this.environmentName = environmentName;
         return this;
     }
 
-    public KinesisConsumerRunnable withCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
+    public SamzaManagedKinesisConsumer withCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
         this.credentialsProvider = credentialsProvider;
         return this;
     }
 
-    public KinesisConsumerRunnable withInitialPositionInStream(String positionInStream) {
+    public SamzaManagedKinesisConsumer withInitialPositionInStream(String positionInStream) {
         this.positionInStream = positionInStream;
         return this;
     }

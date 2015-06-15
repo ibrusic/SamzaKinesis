@@ -8,11 +8,10 @@
  * or implied. See the License for the specific language governing permissions
  * and limitations under the License.
  */
-package com.amazonaws.services.kinesis.samza.consumer.kcl;
+package com.amazonaws.services.kinesis.samza.processor;
 
 import java.util.List;
 
-import com.amazonaws.services.kinesis.samza.KinesisSystemConsumer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -25,23 +24,29 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.*;
+public abstract class ManagedKinesisClientProcessor implements IRecordProcessor {
+    private static final Log LOG = LogFactory.getLog(ManagedKinesisClientProcessor.class);
 
-/**
- * Abstract class for defining a Kinesis record processor.
- */
-public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor {
-    // Logger for KinesisRecordProcessors
-    protected static final Log LOG = LogFactory.getLog(AbstractKinesisRecordProcessor.class);
+    private final int NUM_RETRIES = 10;
 
-    // Kinesis shardId to be processed
-    protected String kinesisShardId;
+    private final long BACKOFF_TIME_IN_MILLIS = 100L;
 
-    // Factory the processor was created by
+    private String kinesisShardId;
+
     private IRecordProcessorFactory createdByFactory;
 
-    // Samza's consumer to send messages to
-    protected KinesisSystemConsumer consumer;
+    public void setCreatedByFactory(IRecordProcessorFactory factory) {
+        this.createdByFactory = factory;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void initialize(String shardId) {
+        LOG.info("Initializing Managed Processor for Shard: " + shardId);
+        this.kinesisShardId = shardId;
+    }
 
     /**
      * {@inheritDoc}
@@ -50,23 +55,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
     public abstract void processRecords(List<Record> records,
             IRecordProcessorCheckpointer checkpointer);
 
-    /**
-     * Copies the record processor
-     * @return
-     * @throws Exception
-     */
-    public abstract AbstractKinesisRecordProcessor copy() throws Exception;
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void initialize(String shardId) {
-        System.out.println("Initializing " + shardId);
-        LOG.info("Initializing Managed Processor for Shard: " + shardId);
-        this.kinesisShardId = shardId;
-        this.consumer.registerProcessor(shardId, this);
-    }
+    public abstract ManagedKinesisClientProcessor copy() throws Exception;
 
     /**
      * {@inheritDoc}
@@ -76,8 +65,8 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
         LOG.info("Shutting down record processor for shard: " + kinesisShardId);
 
         // notify the factory that created this processor of shutdown
-        if (this.createdByFactory instanceof KinesisRecordProcessorFactory) {
-            ((KinesisRecordProcessorFactory) this.createdByFactory).notifyOfShutdown(this);
+        if (this.createdByFactory instanceof ManagedKinesisClientProcessorFactory) {
+            ((ManagedKinesisClientProcessorFactory) this.createdByFactory).notifyOfShutdown(this);
         }
 
         // Important to checkpoint after reaching end of shard, so we can start
@@ -98,7 +87,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
      */
     protected void checkpoint(IRecordProcessorCheckpointer checkpointer) {
         LOG.info("Checkpointing shard " + kinesisShardId);
-        for (int i = 0; i < DEFAULT_NUM_RETRIES; i++) {
+        for (int i = 0; i < NUM_RETRIES; i++) {
             try {
                 checkpointer.checkpoint();
                 break;
@@ -109,12 +98,12 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
                 break;
             } catch (ThrottlingException e) {
                 // Backoff and re-attempt checkpoint upon transient failures
-                if (i >= (DEFAULT_NUM_RETRIES - 1)) {
+                if (i >= (NUM_RETRIES - 1)) {
                     LOG.error("Checkpoint failed after " + (i + 1) + "attempts.", e);
                     break;
                 } else {
                     LOG.info("Transient issue when checkpointing - attempt " + (i + 1) + " of "
-                            + DEFAULT_NUM_RETRIES, e);
+                            + NUM_RETRIES, e);
                 }
             } catch (InvalidStateException e) {
                 // This indicates an issue with the DynamoDB table (check for
@@ -125,18 +114,10 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
                 break;
             }
             try {
-                Thread.sleep(DEFAULT_BACKOFF_TIME_IN_MILLIS);
+                Thread.sleep(BACKOFF_TIME_IN_MILLIS);
             } catch (InterruptedException e) {
                 LOG.debug("Interrupted sleep", e);
             }
         }
-    }
-
-    /**
-     * Sets the processor factory
-     * @param factory
-     */
-    public void setCreatedByFactory(IRecordProcessorFactory factory) {
-        this.createdByFactory = factory;
     }
 }

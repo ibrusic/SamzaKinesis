@@ -8,7 +8,7 @@
  * or implied. See the License for the specific language governing permissions
  * and limitations under the License.
  */
-package com.amazonaws.services.kinesis.samza.consumer.kcl;
+package com.amazonaws.services.kinesis.samza.processor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,16 +23,15 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
  * Simple factory class to generate a standalone Kinesis Aggregator
  * IRecordProcessor for the application
  */
-public class KinesisRecordProcessorFactory implements IRecordProcessorFactory {
+public class ManagedKinesisClientProcessorFactory implements IRecordProcessorFactory {
 
     private static Map<String, Object> createdProcessors = new HashMap<String, Object>();
 
-    private final Log LOG = LogFactory.getLog(KinesisRecordProcessorFactory.class);
+    private final Log LOG = LogFactory.getLog(ManagedKinesisClientProcessorFactory.class);
 
-    private AbstractKinesisRecordProcessor managedProcessor;
+    private ManagedKinesisClientProcessor managedProcessor;
 
-    public KinesisRecordProcessorFactory(AbstractKinesisRecordProcessor managedProcessor) {
-        System.out.println("Factory created");
+    public ManagedKinesisClientProcessorFactory(ManagedKinesisClientProcessor managedProcessor) {
         this.managedProcessor = managedProcessor;
     }
 
@@ -40,11 +39,9 @@ public class KinesisRecordProcessorFactory implements IRecordProcessorFactory {
      * {@inheritDoc}
      */
     public IRecordProcessor createProcessor() {
-        System.out.println("Creating processor");
         try {
-
             LOG.info("Creating new Managed Client Processor");
-            AbstractKinesisRecordProcessor p = this.managedProcessor.copy();
+            ManagedKinesisClientProcessor p = this.managedProcessor.copy();
             createdProcessors.put(p.toString(), p);
             return p;
         } catch (Exception e) {
