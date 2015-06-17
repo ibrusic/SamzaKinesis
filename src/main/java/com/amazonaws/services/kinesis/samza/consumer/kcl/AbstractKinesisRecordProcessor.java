@@ -12,7 +12,7 @@ package com.amazonaws.services.kinesis.samza.consumer.kcl;
 
 import java.util.List;
 
-import com.amazonaws.services.kinesis.samza.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 

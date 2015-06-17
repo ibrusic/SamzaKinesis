@@ -1,17 +1,17 @@
-package com.amazonaws.services.kinesis.samza;
+package com.amazonaws.services.kinesis.samza.consumer;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.config.Config;
-import org.apache.samza.config.MapConfig;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemConsumer;
 import org.apache.samza.system.SystemStreamPartition;
@@ -25,46 +25,30 @@ import static com.amazonaws.services.kinesis.samza.consumer.Constants.*;
  * container thread reads messages off the queue.
  */
 public class KinesisSystemConsumer extends BlockingEnvelopeMap {
-
-    public static final String SAMPLE_APPLICATION_STREAM_NAME = "myFirstStream";
-
-    public static final String SAMPLE_APPLICATION_NAME = "kinesisApp";
-
+    /**
+     * AWS credentials
+     */
     private static AWSCredentialsProvider credentials;
+    /**
+     * App name
+     */
     private final String appName;
+    /**
+     * Region where the Kinesis streams are
+     */
     private final String region;
-
-    public static void main(String[] args) throws Exception {
-        String path = "/Users/renatomarroquin/Documents/Libs/Amazon/rootkey.prod.csv";
-        Map<String, String> m = new HashMap<>();
-        m.put(String.format("systems.%s.%s", SAMPLE_APPLICATION_NAME, CONFIG_PATH_PARAM), path);
-        m.put(String.format("systems.%s.%s", SAMPLE_APPLICATION_NAME, STREAM_POSITION_PARAM), SAMPLE_APPLICATION_INITIAL_POSITION_IN_STREAM.toString());
-        m.put(String.format("systems.%s.%s", SAMPLE_APPLICATION_NAME, APP_NAME_PARAM), SAMPLE_APPLICATION_NAME);
-        m.put(String.format("systems.%s.%s", SAMPLE_APPLICATION_NAME, STREAM_NAME_PARAM), SAMPLE_APPLICATION_STREAM_NAME);
-        MapConfig conf = new MapConfig(m);
-        KinesisConsumerRunnable worker2 = new KinesisConsumerRunnable(SAMPLE_APPLICATION_NAME,
-                SAMPLE_APPLICATION_STREAM_NAME,
-                new ImplKinesisRecordProcessor(null, new KinesisSystemConsumer(SAMPLE_APPLICATION_NAME, conf)), "LATEST"
-        ).withCredentialsProvider(credentials).withRegionName("us-west");
-
-        Thread thread = new Thread(worker2);
-        thread.start();
-        Thread t2 = new Thread(worker2);
-        t2.start();
-    }
-
+    /**
+     * Logger for the KinesisSystemConsumer
+     */
     private static final Log LOG = LogFactory.getLog(KinesisSystemConsumer.class);
-
+    /**
+     * System name
+     */
     private final String systemName;
-
-    private final Config config;
-
+    /**
+     * Initial Kinesis stream position
+     */
     private String initialPos;
-
-    // Initial position in the stream when the application starts up for the first time.
-    // Position can be one of LATEST (most recent data) or TRIM_HORIZON (oldest available data)
-    private static final InitialPositionInStream SAMPLE_APPLICATION_INITIAL_POSITION_IN_STREAM =
-            InitialPositionInStream.LATEST;
 
     /**
      * One processor per Samza partition (and since we try to use one partition per
@@ -84,8 +68,10 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * Message sequence numbers delivered per partition since the last checkpoint.
      */
     private Map<SystemStreamPartition, Queue<Delivery>> deliveries =
-            new HashMap<SystemStreamPartition, Queue<Delivery>>();
-
+            new ConcurrentHashMap<>();
+    /**
+     * Map for relating each SSP to the created threads
+     */
     private Map<SystemStreamPartition, Thread> threads = new HashMap<SystemStreamPartition, Thread>();
 
     /**
@@ -101,7 +87,6 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));
         String appName = config.get("job.name");
         this.systemName = systemName;
-        this.config = config;
         this.appName = appName;
         this.initialPos = iniPos;
         this.region = region;
@@ -128,7 +113,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     /**
      * We assume here that each container consumes only one "partition" of the
      * input stream, where "partition" has been artificially set up in
-     * {@link KinesisSystemAdmin} to be mapped 1:1 to Samza containers. Each
+     * {@link com.amazonaws.services.kinesis.samza.KinesisSystemAdmin} to be mapped 1:1 to Samza containers. Each
      * partition may actually involve consuming multiple shards, but that is
      * handled by the Kinesis client library.
      * <p/>
@@ -233,8 +218,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * and the Samza container will pick it up from there when polling for new
      * messages.
      */
-    //TODO does it need to be synchronized?
-    public synchronized void putMessage(AbstractKinesisRecordProcessor kinesisRecordProcessor, IncomingMessageEnvelope envelope) {
+    public void putMessage(AbstractKinesisRecordProcessor kinesisRecordProcessor, IncomingMessageEnvelope envelope) {
         // keeping track of received messages
         this.trackDeliveries(kinesisRecordProcessor, envelope);
         // getting the message ready for Samza
@@ -253,17 +237,32 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     private void trackDeliveries(AbstractKinesisRecordProcessor processor, IncomingMessageEnvelope envelope) {
         if (!deliveries.containsKey(envelope.getSystemStreamPartition())) {
-            deliveries.put(envelope.getSystemStreamPartition(), new LinkedList<Delivery>());
+            deliveries.put(envelope.getSystemStreamPartition(), new ConcurrentLinkedQueue<Delivery>());
         }
 
         Queue<Delivery> queue = deliveries.get(envelope.getSystemStreamPartition());
         queue.add(new Delivery(envelope.getOffset(), processor));
     }
 
+    /**
+     * Class to map between the sequenceNumbers obtained and the processors that did
+     */
     private static class Delivery {
+        /**
+         * Message sequence number
+         */
         private final String sequenceNumber;
+        /**
+         * Kinesis record processor
+         */
         private final AbstractKinesisRecordProcessor processor;
 
+        /**
+         * Constructor
+         *
+         * @param sequenceNumber
+         * @param processor
+         */
         public Delivery(String sequenceNumber, AbstractKinesisRecordProcessor processor) {
             this.sequenceNumber = sequenceNumber;
             this.processor = processor;

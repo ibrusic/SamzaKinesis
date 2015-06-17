@@ -1,4 +1,4 @@
-package com.amazonaws.services.kinesis.samza.examples;
+package samza.examples;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
@@ -20,6 +20,6 @@ public class AmazonKinesisApplicationRecordProcessorFactory implements IRecordPr
     public IRecordProcessor createProcessor() {
         LOG.debug("Creating processor from " + this.getClass().getSimpleName());
         System.out.println("Creating processor");
-        return new AmazonKinesisApplicationSampleRecordProcessor();
+        return new samza.examples.AmazonKinesisApplicationSampleRecordProcessor();
     }
 }

@@ -15,6 +15,7 @@ import java.net.NetworkInterface;
 import java.util.UUID;
 
 import com.amazonaws.services.kinesis.samza.consumer.InvalidConfigurationException;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.system.SystemStreamPartition;
@@ -35,41 +36,67 @@ import static com.amazonaws.services.kinesis.samza.consumer.Constants.DEFAULT_MA
  * Runnable class to consumer from Kinesis.
  */
 public class KinesisConsumerRunnable implements Runnable {
-    private static final String version = ".9.0";
+//    private static final String version = ".9.0";
 
+    /**
+     * Logger for KinesisConsumerRunnable
+     */
     private static final Log LOG = LogFactory.getLog(KinesisConsumerRunnable.class);
 
-    /** Stream name */
+    /**
+     * Stream name
+     */
     private String streamName;
-    /** App name */
+    /**
+     * App name
+     */
     private String appName;
-    /** Region name */
+    /**
+     * Region name
+     */
     private String regionName;
-    /** Environment name */
+    /**
+     * Environment name
+     */
     private String environmentName;
-    /** Partition inStream */
-    private String positionInStream;
-    /** Kinesis endPoint */
+    /**
+     * Kinesis endPoint
+     */
     private String kinesisEndpoint;
-
+    /**
+     * AWS credentials holder
+     */
     private AWSCredentialsProvider credentialsProvider;
-
+    /**
+     * Position in the stream
+     */
     private InitialPositionInStream streamPosition;
-
-    private int failuresToTolerate = DEFAULT_FAILURES_TOLERATED;
-
-    private int maxRecords = DEFAULT_MAX_RECORDS;
-
+    /**
+     * Number of failures a worker can tolerate
+     */
+    private int failuresToTolerate;
+    /**
+     * Maximum number of records a worker can consume
+     */
+    private int maxRecords;
+    /**
+     * KLC configuration
+     */
     private KinesisClientLibConfiguration config;
-
+    /**
+     * Flag set once KLC properties are set
+     */
     private boolean isConfigured = false;
-
+    /**
+     * Template processor for consuming a Kinesis stream.
+     */
     private AbstractKinesisRecordProcessor templateProcessor;
 
     private SystemStreamPartition systemStreamPartition;
 
     /**
      * Constructor
+     *
      * @param streamName
      * @param appName
      * @param processor
@@ -79,27 +106,37 @@ public class KinesisConsumerRunnable implements Runnable {
         this.appName = appName;
         this.streamName = streamName;
         this.templateProcessor = processor;
-        this.positionInStream = streamPosition;
         this.failuresToTolerate = DEFAULT_FAILURES_TOLERATED;
+        this.maxRecords = DEFAULT_MAX_RECORDS;
+        this.streamPosition = InitialPositionInStream.LATEST;
+        if (!StringUtils.isEmpty(streamPosition)) {
+            this.streamPosition = InitialPositionInStream.valueOf(streamPosition);
+        }
     }
 
     @Override
     public void run() {
         try {
-           runWorker();
+            runWorker();
         } catch (Exception e) {
-            System.out.println("Error in worker loop");
             LOG.error("Error in worker loop", e);
             e.printStackTrace();
         }
     }
 
+    /**
+     * Runs an AWS worker and returns 0 if successful or -1 if an exception was found
+     *
+     * @return
+     * @throws Exception
+     */
     public int runWorker() throws Exception {
+        int exitCode = 0;
+        int failures = 0;
+
+        // Configure KLC options
         configure();
-
-        System.out.println(String.format("Starting %s", appName));
-        LOG.info(String.format("Running %s to process stream %s", appName, streamName));
-
+        // Setting up worker properties
         String workerId = InetAddress.getLocalHost().getCanonicalHostName() + ":" + UUID.randomUUID();
         KinesisClientLibConfiguration kinesisClientLibConfiguration =
                 new KinesisClientLibConfiguration(appName,
@@ -108,19 +145,16 @@ public class KinesisConsumerRunnable implements Runnable {
                         workerId);
         kinesisClientLibConfiguration.withInitialPositionInStream(InitialPositionInStream.LATEST);
 
+        LOG.info(String.format("Running %s to process stream %s", appName, streamName));
         IRecordProcessorFactory recordProcessorFactory = new KinesisRecordProcessorFactory(this.templateProcessor);
         Worker worker = new Worker(recordProcessorFactory, kinesisClientLibConfiguration);
         worker.run();
-
-        int exitCode = 0;
-        int failures = 0;
 
         // run the worker, tolerating as many failures as is configured
         while (failures < failuresToTolerate || failuresToTolerate == -1) {
             try {
                 worker.run();
             } catch (Throwable t) {
-                System.out.println("error");
                 LOG.error("Caught throwable while processing data.", t);
 
                 failures++;
@@ -135,34 +169,48 @@ public class KinesisConsumerRunnable implements Runnable {
         return exitCode;
     }
 
+    /**
+     * Asserts if a condition is valid or not for configuration properties
+     *
+     * @param condition
+     * @param message
+     * @throws Exception
+     */
     private void assertThat(boolean condition, String message) throws Exception {
         if (!condition) {
             throw new InvalidConfigurationException(message);
         }
     }
 
+    /**
+     * Validates that the minimum configuration options are set.
+     *
+     * @throws InvalidConfigurationException
+     */
     private void validateConfig() throws InvalidConfigurationException {
-        System.out.println("validating");
+        LOG.debug("Validating configuration");
         try {
             assertThat(this.streamName != null, "Must Specify a Stream Name");
             assertThat(this.appName != null, "Must Specify an Application Name");
         } catch (Exception e) {
+            LOG.error("Error validating configuration properties.");
             throw new InvalidConfigurationException(e.getMessage());
         }
     }
 
+    /**
+     * Configures the KLC for usage.
+     *
+     * @throws Exception
+     */
     public void configure() throws Exception {
         if (!isConfigured) {
             validateConfig();
 
             try {
-                String userAgent = "AWSKinesisManagedConsumer/" + this.version;
-
-                if (this.positionInStream != null) {
-                    streamPosition = InitialPositionInStream.valueOf(this.positionInStream);
-                } else {
-                    streamPosition = InitialPositionInStream.LATEST;
-                }
+                // Setting the user agent's name as our app name
+                // String userAgent = "AWSKinesisManagedConsumer/" + this.version;
+                String userAgent = this.appName;
 
                 // append the environment name to the application name
                 if (environmentName != null) {
@@ -176,7 +224,6 @@ public class KinesisConsumerRunnable implements Runnable {
 
                 String workerId = NetworkInterface.getNetworkInterfaces() + ":" + UUID.randomUUID();
                 LOG.info("Using Worker ID: " + workerId);
-                System.out.println("Using Worker ID: " + workerId);
 
                 // obtain credentials using the default provider chain or the
                 // credentials provider supplied
@@ -186,9 +233,6 @@ public class KinesisConsumerRunnable implements Runnable {
                 LOG.info("Using credentials with Access Key ID: "
                         + credentialsProvider.getCredentials().getAWSAccessKeyId());
 
-                System.out.println("Using credentials with Access Key ID: "
-                        + credentialsProvider.getCredentials().getAWSAccessKeyId());
-
                 config = new KinesisClientLibConfiguration(appName, streamName,
                         credentialsProvider, workerId).withInitialPositionInStream(streamPosition).withKinesisEndpoint(
                         kinesisEndpoint);
@@ -196,15 +240,13 @@ public class KinesisConsumerRunnable implements Runnable {
                 config.getKinesisClientConfiguration().setUserAgent(userAgent);
 
                 if (regionName != null) {
-                    Region region = Region.getRegion(Regions.fromName(regionName));
-                    config.withRegionName(region.getName());
+                    config.withRegionName(Regions.valueOf(regionName).getName());
                 }
 
                 if (this.maxRecords != -1)
                     config.withMaxRecords(maxRecords);
 
-                if (this.positionInStream != null)
-                    config.withInitialPositionInStream(InitialPositionInStream.valueOf(this.positionInStream));
+                config.withInitialPositionInStream(this.streamPosition);
 
                 LOG.info(String.format(
                         "Amazon Kinesis Aggregators Managed Client prepared for %s on %s in %s (%s) using %s Max Records",
@@ -214,6 +256,7 @@ public class KinesisConsumerRunnable implements Runnable {
 
                 isConfigured = true;
             } catch (Exception e) {
+                LOG.error("Error while configuring KLC properties.");
                 throw new InvalidConfigurationException(e);
             }
         }
@@ -235,7 +278,7 @@ public class KinesisConsumerRunnable implements Runnable {
     }
 
     public KinesisConsumerRunnable withRegionName(String regionName) {
-        this.regionName = regionName;
+        this.regionName = regionName.toUpperCase();
         return this;
     }
 
@@ -250,7 +293,10 @@ public class KinesisConsumerRunnable implements Runnable {
     }
 
     public KinesisConsumerRunnable withInitialPositionInStream(String positionInStream) {
-        this.positionInStream = positionInStream;
+        this.streamPosition = InitialPositionInStream.LATEST;
+        if (!StringUtils.isEmpty(positionInStream)) {
+            this.streamPosition = InitialPositionInStream.valueOf(positionInStream);
+        }
         return this;
     }
 }

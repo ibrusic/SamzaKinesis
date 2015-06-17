@@ -1,6 +1,8 @@
 package com.amazonaws.services.kinesis.samza;
 
 import java.util.HashMap;
+
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
 import org.apache.samza.SamzaException;
 import org.apache.samza.config.Config;
 import org.apache.samza.metrics.MetricsRegistry;

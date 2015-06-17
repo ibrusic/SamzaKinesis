@@ -16,34 +16,70 @@
  */
 package com.amazonaws.services.kinesis.samza.consumer;
 
-import org.omg.CORBA.PUBLIC_MEMBER;
-
+/**
+ * Contains all the constants needed by the Kinesis' consumers/producers.
+ */
 public class Constants {
+    // Configurations coming from the kinesis-stream.properties
+    /**
+     * AWS credentials path
+     */
     public static final String CONFIG_PATH_PARAM = "config-file-path";
 
+    /**
+     * AWS stream name
+     */
     public static final String STREAM_NAME_PARAM = "stream-name";
 
+    /**
+     * Application that will consume such stream
+     */
     public static final String APP_NAME_PARAM = "job.name";
 
+    /**
+     * Position in the AWS stream from where we start consuming
+     */
     public static final String STREAM_POSITION_PARAM = "position-in-stream";
 
-    // Aws region parameter
+    /**
+     * Aws region parameter
+     */
     public static final String AWS_REGION_PARAM = "aws-region";
 
+    // TODO this still need to be set up
+    /**
+     * Maximum number of records consumed by record processor.
+     */
     public static final String MAX_RECORDS_PARAM = "max-records";
 
+    /**
+     * Default failures to be tolerated when reading from a kinesis stream
+     */
+    public static final String FAILURES_TOLERATED_PARAM = "failures-tolerated";
+
+    /**
+     * Environment from where the application is being executed
+     */
     public static final String ENVIRONMENT_PARAM = "environment";
 
-    // Default failures to be tolerated when reading from a kinesis stream
-    public static final String FAILURES_TOLERATED_PARAM = "failures-tolerated";
+    // Default configuration values values
+    /**
+     * Default failures tolerated when consuming Kinesis streams.
+     */
     public static final int DEFAULT_FAILURES_TOLERATED = -1;
 
-    // Default number of checkpoint retires
+    /**
+     * Default number of checkpoint retires.
+     */
     public static final int DEFAULT_NUM_RETRIES = 10;
 
-    // Backoff time when trying to checkpoint
+    /**
+     * Backoff time when trying to checkpoint
+     */
     public static final long DEFAULT_BACKOFF_TIME_IN_MILLIS = 100L;
 
-    // Default max number of recors to be consumed
+    /**
+     * Default max number of recors to be consumed
+     */
     public static final int DEFAULT_MAX_RECORDS = -1;
 }

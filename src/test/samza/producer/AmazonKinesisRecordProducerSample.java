@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package com.amazonaws.services.kinesis.samza.producer;
+package samza.producer;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -38,27 +38,14 @@ public class AmazonKinesisRecordProducerSample {
 
     public static final String SAMPLE_APPLICATION_STREAM_NAME = "myFirstStream";
 
-    private static final String SAMPLE_APPLICATION_NAME = "SampleKinesisApplication";
+    private static final String SAMPLE_APPLICATION_NAME = "kinesisApp";
+    private static final Integer NUM_SHARDS = 1;
 
     private static AmazonKinesisClient kinesis;
 
     private static AWSCredentialsProvider credentialsProvider;
+
     private static void init() throws Exception {
-        /*
-         * The ProfileCredentialsProvider will return your [default]
-         * credential profile by reading from the credentials file located at
-         * (~/.aws/credentials).
-         */
-//        AWSCredentials credentials = null;
-//        try {
-//            credentials = new ProfileCredentialsProvider().getCredentials();
-//        } catch (Exception e) {
-//            throw new AmazonClientException(
-//                    "Cannot load the credentials from the credential profiles file. " +
-//                            "Please make sure that your credentials file is at the correct " +
-//                            "location (~/.aws/credentials), and is in valid format.",
-//                    e);
-//        }
         credentialsProvider = new PropertiesFileCredentialsProvider("/Users/renatomarroquin/Documents/Libs/Amazon/rootkey.prod.csv");
         kinesis = new AmazonKinesisClient(credentialsProvider);//credentials);
         kinesis.configureRegion(Regions.US_EAST_1);
@@ -68,7 +55,7 @@ public class AmazonKinesisRecordProducerSample {
         init();
 
         final String myStreamName = SAMPLE_APPLICATION_STREAM_NAME;
-        final Integer myStreamSize = 2;
+        final Integer myStreamSize = NUM_SHARDS;
 
         // Describe the stream and check if it exists.
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest().withStreamName(myStreamName);
@@ -129,7 +116,7 @@ public class AmazonKinesisRecordProducerSample {
             PutRecordRequest putRecordRequest = new PutRecordRequest();
             putRecordRequest.setStreamName(myStreamName);
             putRecordRequest.setData(ByteBuffer.wrap(String.format("testData-%d", createTime).getBytes()));
-            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt%2));
+            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt % 2));
             PutRecordResult putRecordResult = kinesis.putRecord(putRecordRequest);
             System.out.printf("Successfully put record, partition key : %s, ShardID : %s, SequenceNumber : %s.\n",
                     putRecordRequest.getPartitionKey(),

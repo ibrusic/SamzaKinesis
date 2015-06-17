@@ -1,4 +1,4 @@
-package com.amazonaws.services.kinesis.samza.examples;
+package samza.examples;
 
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;

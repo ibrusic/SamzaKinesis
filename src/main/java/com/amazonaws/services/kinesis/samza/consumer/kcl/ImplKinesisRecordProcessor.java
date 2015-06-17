@@ -3,13 +3,11 @@ package com.amazonaws.services.kinesis.samza.consumer.kcl;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.samza.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamPartition;
 
-import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
 import java.util.List;
 
 /**

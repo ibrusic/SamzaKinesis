@@ -1,4 +1,4 @@
-package com.amazonaws.services.kinesis.samza.examples;
+package samza.examples;
 
 /*
  * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
