@@ -1,5 +1,5 @@
 Kinesis Samza
-===========
+=============
 
 Kinesis Samza provides a connector architecture to allow Samza processing to be run against Amazon Kinesis. This connector makes the use of Kinesis Streams transparent to the Samza application, allowing for low friction migration between Apache Kafka and Amazon Kinesis.
 
