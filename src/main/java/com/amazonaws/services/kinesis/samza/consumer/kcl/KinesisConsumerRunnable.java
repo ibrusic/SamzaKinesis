@@ -134,20 +134,13 @@ public class KinesisConsumerRunnable implements Runnable {
         int exitCode = 0;
         int failures = 0;
 
-        // Configure KLC options
+        // Configure KLC options and worker properties
         configure();
-        // Setting up worker properties
-        String workerId = InetAddress.getLocalHost().getCanonicalHostName() + ":" + UUID.randomUUID();
-        KinesisClientLibConfiguration kinesisClientLibConfiguration =
-                new KinesisClientLibConfiguration(appName,
-                        streamName,
-                        credentialsProvider,
-                        workerId);
-        kinesisClientLibConfiguration.withInitialPositionInStream(InitialPositionInStream.LATEST);
-
         LOG.info(String.format("Running %s to process stream %s", appName, streamName));
         IRecordProcessorFactory recordProcessorFactory = new KinesisRecordProcessorFactory(this.templateProcessor);
-        Worker worker = new Worker(recordProcessorFactory, kinesisClientLibConfiguration);
+
+        // Starting worker
+        Worker worker = new Worker(recordProcessorFactory, this.config);
         worker.run();
 
         // run the worker, tolerating as many failures as is configured

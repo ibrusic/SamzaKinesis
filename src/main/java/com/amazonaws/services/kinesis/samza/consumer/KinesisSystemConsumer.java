@@ -8,6 +8,7 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
+import com.amazonaws.services.kinesis.samza.KinesisUtils;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -88,25 +89,8 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         this.systemName = systemName;
         this.appName = appName;
         this.initialPos = iniPos;
-        this.region = region;
-        loadAwsCredentials(awsCredentialsPath);
-    }
-
-    /**
-     * Tries loading AwsCredentials.
-     *
-     * @param awsCredentialsPath
-     */
-    private void loadAwsCredentials(String awsCredentialsPath) {
-        try {
-            credentials = awsCredentialsPath == null ? new DefaultAWSCredentialsProviderChain() :
-                    new PropertiesFileCredentialsProvider(awsCredentialsPath);
-        } catch (Exception e) {
-            throw new AmazonClientException(
-                    "Cannot load the credentials from provided path. " +
-                            "Check your credential profiles file (~/.aws/credentials), or the provided path.",
-                    e);
-        }
+        this.region = region.toUpperCase();
+        this.credentials = KinesisUtils.loadAwsCredentials(awsCredentialsPath);
     }
 
     /**
@@ -132,18 +116,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     @Override
     public void start() {
         for (Map.Entry<SystemStreamPartition, AbstractKinesisRecordProcessor> entry : templateProcessors.entrySet()) {
-            // TODO right now number of shards are specified in conf file, but they could be obtained from Amazon.
-            String[] streamShards = entry.getKey().getStream().split("#");
-            if (streamShards.length == 2) {
-                int numShards = Integer.parseInt(streamShards[1]);
-                LOG.info(String.format("Creating %d threads for %s stream.", numShards, streamShards[0]));
-                for (int cnt = 0; cnt < numShards; cnt++) {
-                    createKinesisConsumerThread(entry.getKey(), streamShards[0], entry.getValue());
-                }
-            } else {
-                createKinesisConsumerThread(entry.getKey(), streamShards[0], entry.getValue());
-            }
-
+                    createKinesisConsumerThread(entry.getKey(), entry.getKey().getStream(), entry.getValue());
         }
     }
 
