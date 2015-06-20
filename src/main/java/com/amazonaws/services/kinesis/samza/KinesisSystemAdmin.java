@@ -63,10 +63,6 @@ public class KinesisSystemAdmin implements SystemAdmin {
         for (String streamName : streamNames) {
             // Get the number of shards
             int numShards = setShardNumber(streamName,credentialsPath,region);
-            System.out.println("===========================================================================");
-            System.out.println("Nro de shards" + numShards + streamName);
-            System.out.println("===========================================================================");
-
             if (numShards > 0) {
                 // Create Metadata for each shard found
                 Map<Partition, SystemStreamPartitionMetadata> partitionMeta =
@@ -80,6 +76,11 @@ public class KinesisSystemAdmin implements SystemAdmin {
             }
         }
         return metadata;
+    }
+
+    @Override
+    public void createChangelogStream(String s, int i) {
+        //TODO
     }
 
     @Override
