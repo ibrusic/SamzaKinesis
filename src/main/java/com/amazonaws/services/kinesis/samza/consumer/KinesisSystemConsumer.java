@@ -81,7 +81,6 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * @param config
      */
     public KinesisSystemConsumer(String systemName, Config config) {
-        System.out.println(config);
         String awsCredentialsPath = config.get(String.format("systems.%s.%s", systemName, CONFIG_PATH_PARAM));
         String iniPos = config.get(String.format("systems.%s.%s", systemName, STREAM_POSITION_PARAM));
         String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));

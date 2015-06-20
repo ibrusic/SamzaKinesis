@@ -48,10 +48,11 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
      */
     @Override
     public abstract void processRecords(List<Record> records,
-            IRecordProcessorCheckpointer checkpointer);
+                                        IRecordProcessorCheckpointer checkpointer);
 
     /**
      * Copies the record processor
+     *
      * @return
      * @throws Exception
      */
@@ -62,7 +63,6 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
      */
     @Override
     public void initialize(String shardId) {
-        System.out.println("Initializing " + shardId);
         LOG.info("Initializing Managed Processor for Shard: " + shardId);
         this.kinesisShardId = shardId;
         this.consumer.registerProcessor(shardId, this);
@@ -93,7 +93,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
 
     /**
      * Checkpoint with retries.
-     * 
+     *
      * @param checkpointer
      */
     protected void checkpoint(IRecordProcessorCheckpointer checkpointer) {
@@ -120,7 +120,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
                 // This indicates an issue with the DynamoDB table (check for
                 // table, provisioned IOPS).
                 LOG.error(
-                        "Cannot save checkpoint to the DynamoDB table used by the KinesisClientLibrary.",
+                        "Cannot save checkpoint to DynamoDB table used by the KinesisClientLibrary.",
                         e);
                 break;
             }
@@ -134,6 +134,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
 
     /**
      * Sets the processor factory
+     *
      * @param factory
      */
     public void setCreatedByFactory(IRecordProcessorFactory factory) {

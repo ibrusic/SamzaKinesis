@@ -60,6 +60,12 @@ public class ImplKinesisRecordProcessor extends AbstractKinesisRecordProcessor {
             System.out.println(String.format("Processing Key:%s  - Value:%s", new String(key), new String(data)));
             consumer.putMessage(this, envelope);
         }
+
+        // Checkpoint once every checkpoint interval.
+        if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
+            checkpoint(checkpointer);
+            nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+        }
     }
 
     @Override

@@ -28,8 +28,7 @@ import org.apache.samza.system.SystemStreamMetadata.SystemStreamPartitionMetadat
  */
 public class KinesisSystemAdmin implements SystemAdmin {
 
-    // N.B. When Samza is deployed on something other than YARN, this will need
-    // to be updated to determine the container count correctly.
+    // Number of containers is yarn-specific, it will have to reviewed
     private static final String CONTAINER_COUNT_CONFIG = "yarn.container.count";
 
     private final int numContainers;
