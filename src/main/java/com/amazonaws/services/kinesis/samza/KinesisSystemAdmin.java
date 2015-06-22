@@ -12,8 +12,8 @@ import org.apache.samza.system.SystemStreamMetadata;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.system.SystemStreamMetadata.SystemStreamPartitionMetadata;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.AWS_REGION_PARAM;
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.CONFIG_PATH_PARAM;
+import static com.amazonaws.services.kinesis.samza.Constants.AWS_REGION_PARAM;
+import static com.amazonaws.services.kinesis.samza.Constants.CONFIG_PATH_PARAM;
 
 /**
  * Simple placeholder SystemAdmin. Normally this would be used by Samza to find out what
@@ -80,7 +80,7 @@ public class KinesisSystemAdmin implements SystemAdmin {
 
     @Override
     public void createChangelogStream(String s, int i) {
-        //TODO
+        throw new IllegalStateException("Kinesis does not keep the change log state yet!");
     }
 
     @Override

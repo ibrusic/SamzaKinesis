@@ -4,10 +4,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.auth.PropertiesFileCredentialsProvider;
 import com.amazonaws.services.kinesis.samza.KinesisUtils;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.*;
 import org.apache.commons.logging.Log;
@@ -18,7 +15,7 @@ import org.apache.samza.system.SystemConsumer;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.*;
+import static com.amazonaws.services.kinesis.samza.Constants.*;
 
 /**
  * Implements the Samza {@link SystemConsumer} interface using a queue. The

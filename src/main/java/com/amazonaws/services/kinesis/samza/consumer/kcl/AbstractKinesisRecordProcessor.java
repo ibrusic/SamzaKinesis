@@ -25,7 +25,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.*;
+import static com.amazonaws.services.kinesis.samza.Constants.*;
 
 /**
  * Abstract class for defining a Kinesis record processor.

@@ -55,12 +55,54 @@ public class KinesisUtils {
     }
 
     /**
+     * Verifies if a Kinesis stream exists or not, and creates it.
+     * @param streamName
+     * @param credentials
+     * @param region
+     * @param numShards
+     * @return
+     * @throws InterruptedException
+     */
+    public static boolean checkOrCreate(String streamName, AmazonKinesisClient kinesis, int numShards) throws InterruptedException {
+        // Describe the stream and check if it exists.
+        DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest().withStreamName(streamName);
+        try {
+            StreamDescription streamDescription = kinesis.describeStream(describeStreamRequest).getStreamDescription();
+            LOG.info("Stream " + streamName + " has a status of " + streamDescription.getStreamStatus());
+            LOG.info("Stream " + streamName + " has " + streamDescription.getShards().size() + " shards");
+
+            if ("DELETING".equals(streamDescription.getStreamStatus())) {
+                LOG.error("Stream is being deleted. Please check it out.");
+                return false;
+            }
+
+            // Wait for the stream to become active if it is not yet ACTIVE.
+            if (!"ACTIVE".equals(streamDescription.getStreamStatus())) {
+                waitForStreamToBecomeAvailable(streamName, kinesis);
+            }
+        } catch (ResourceNotFoundException ex) {
+            LOG.info("Stream " + streamName + " does not exist. Creating it now.");
+
+            // Create a stream. The number of shards determines the provisioned throughput.
+            CreateStreamRequest createStreamRequest = new CreateStreamRequest();
+
+            createStreamRequest.setStreamName(streamName);
+            createStreamRequest.setShardCount(numShards);
+
+            kinesis.createStream(createStreamRequest);
+            // The stream is now being created. Wait for it to become active.
+            waitForStreamToBecomeAvailable(streamName, kinesis);
+        }
+        return true;
+    }
+
+    /**
      * Gets an AmazonKinesisClient based on credentials and region
      * @param credentialsPath
      * @param region
      * @return
      */
-    private static AmazonKinesisClient getClient(String credentialsPath, String region) {
+    public static AmazonKinesisClient getClient(String credentialsPath, String region) {
         AWSCredentialsProvider credentialsProvider = loadAwsCredentials(credentialsPath);
         AmazonKinesisClient kClient = new AmazonKinesisClient(credentialsProvider);
         kClient.configureRegion(Regions.valueOf(region.toUpperCase()));

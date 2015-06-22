@@ -11,7 +11,7 @@ import org.apache.samza.config.MapConfig;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.*;
+import static com.amazonaws.services.kinesis.samza.Constants.*;
 
 /**
  * API test

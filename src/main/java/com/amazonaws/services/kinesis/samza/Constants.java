@@ -14,13 +14,13 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.samza.consumer;
+package com.amazonaws.services.kinesis.samza;
 
 /**
  * Contains all the constants needed by the Kinesis' consumers/producers.
  */
 public class Constants {
-    // Configurations coming from the kinesis-stream.properties
+    // Configurations coming from the kinesis-consumer-stream.properties
     /**
      * AWS credentials path
      */
@@ -61,6 +61,12 @@ public class Constants {
      * Environment from where the application is being executed
      */
     public static final String ENVIRONMENT_PARAM = "environment";
+    /**
+     * Parameters for auto-creating a stream if it doesn't exist
+     */
+    public static final String AUTO_CREATE_STREAM = "auto-create-stream";
+    public static final String NUMBER_SHARD = "number-shards";
+    public static final int DEFAULT_NUM_SHARDS = 1;
 
     // Default configuration values values
     /**

@@ -39,7 +39,7 @@ public class AmazonKinesisRecordProducerSample {
     public static final String SAMPLE_APPLICATION_STREAM_NAME = "myFirstStream";
 
     private static final String SAMPLE_APPLICATION_NAME = "kinesisApp";
-    private static final Integer NUM_SHARDS = 1;
+    private static final Integer NUM_SHARDS = 4;
 
     private static AmazonKinesisClient kinesis;
 
@@ -116,7 +116,7 @@ public class AmazonKinesisRecordProducerSample {
             PutRecordRequest putRecordRequest = new PutRecordRequest();
             putRecordRequest.setStreamName(myStreamName);
             putRecordRequest.setData(ByteBuffer.wrap(String.format("testData-%d", createTime).getBytes()));
-            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt % 2));
+            putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt % NUM_SHARDS));
             PutRecordResult putRecordResult = kinesis.putRecord(putRecordRequest);
             System.out.printf("Successfully put record, partition key : %s, ShardID : %s, SequenceNumber : %s.\n",
                     putRecordRequest.getPartitionKey(),

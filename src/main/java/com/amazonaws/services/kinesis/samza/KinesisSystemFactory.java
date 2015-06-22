@@ -3,6 +3,7 @@ package com.amazonaws.services.kinesis.samza;
 import java.util.HashMap;
 
 import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.producer.KinesisSystemProducer;
 import org.apache.samza.SamzaException;
 import org.apache.samza.config.Config;
 import org.apache.samza.metrics.MetricsRegistry;
@@ -39,7 +40,9 @@ public class KinesisSystemFactory implements SystemFactory {
 
     @Override
     public SystemProducer getProducer(String systemName, Config config, MetricsRegistry registry) {
-        throw new SamzaException("Sending messages to Kinesis is not yet supported");
+        KinesisSystemProducer producer = new KinesisSystemProducer(systemName, config);
+        return producer;
+        //throw new SamzaException("Sending messages to Kinesis is not yet supported");
     }
 
     /**

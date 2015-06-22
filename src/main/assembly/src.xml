@@ -42,7 +42,12 @@
       <filtered>true</filtered>
     </file>
       <file>
-          <source>${basedir}/src/main/config/kinesis-stream.properties</source>
+          <source>${basedir}/src/main/config/kinesis-consumer-stream.properties</source>
+          <outputDirectory>config</outputDirectory>
+          <filtered>true</filtered>
+      </file>
+      <file>
+          <source>${basedir}/src/main/config/kinesis-producer-stream.properties</source>
           <outputDirectory>config</outputDirectory>
           <filtered>true</filtered>
       </file>

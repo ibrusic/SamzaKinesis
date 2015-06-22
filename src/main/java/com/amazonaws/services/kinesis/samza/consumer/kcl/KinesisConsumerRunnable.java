@@ -10,7 +10,6 @@
  */
 package com.amazonaws.services.kinesis.samza.consumer.kcl;
 
-import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.UUID;
 
@@ -22,15 +21,14 @@ import org.apache.samza.system.SystemStreamPartition;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.DEFAULT_FAILURES_TOLERATED;
-import static com.amazonaws.services.kinesis.samza.consumer.Constants.DEFAULT_MAX_RECORDS;
+import static com.amazonaws.services.kinesis.samza.Constants.DEFAULT_FAILURES_TOLERATED;
+import static com.amazonaws.services.kinesis.samza.Constants.DEFAULT_MAX_RECORDS;
 
 /**
  * Runnable class to consumer from Kinesis.
