@@ -21,6 +21,7 @@ import java.util.UUID;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
@@ -80,7 +81,7 @@ public final class AmazonKinesisApplicationSample {
                 new KinesisClientLibConfiguration(SAMPLE_APPLICATION_NAME,
                         SAMPLE_APPLICATION_STREAM_NAME,
                         credentialsProvider,
-                        workerId);
+                        workerId).withRegionName(Regions.US_EAST_1.getName());
         kinesisClientLibConfiguration.withInitialPositionInStream(SAMPLE_APPLICATION_INITIAL_POSITION_IN_STREAM);
 
         IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory();

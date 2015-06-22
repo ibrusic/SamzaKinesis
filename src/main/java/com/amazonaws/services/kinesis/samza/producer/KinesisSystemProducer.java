@@ -16,8 +16,7 @@
 package com.amazonaws.services.kinesis.samza.producer;
 
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import com.amazonaws.services.kinesis.model.PutRecordRequest;
-import com.amazonaws.services.kinesis.model.PutRecordResult;
+import com.amazonaws.services.kinesis.model.*;
 import com.amazonaws.services.kinesis.samza.KinesisUtils;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.OutgoingMessageEnvelope;
@@ -27,7 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static com.amazonaws.services.kinesis.samza.KinesisUtils.getClient;
 import static com.amazonaws.services.kinesis.samza.Constants.*;
@@ -38,11 +39,10 @@ import static com.amazonaws.services.kinesis.samza.Constants.*;
 public class KinesisSystemProducer implements SystemProducer {
     private static final Logger LOG = LoggerFactory.getLogger(KinesisSystemProducer.class);
 
-    private final List<String> streams;
+    private final Map<String, List<PutRecordsRequestEntry>> streams;
     private AmazonKinesisClient kinesis;
     private final boolean autoCreate;
     private final int numShards;
-
 
     public KinesisSystemProducer(String systemName, Config config) {
         String credentialsPath = config.get(String.format("systems.%s.%s", systemName, CONFIG_PATH_PARAM));
@@ -50,22 +50,22 @@ public class KinesisSystemProducer implements SystemProducer {
         this.autoCreate = config.getBoolean(String.format("systems.%s.%s", systemName, AUTO_CREATE_STREAM), false);
         this.numShards = config.getInt(String.format("systems.%s.%s", systemName, NUMBER_SHARD), DEFAULT_NUM_SHARDS);
         this.kinesis = getClient(credentialsPath, region);
-        this.streams = new ArrayList<>();
+        this.streams = new HashMap<>();
     }
 
     @Override
     public void start() {
-        //TODO
+        // Nothing to do
     }
 
     @Override
     public void stop() {
-        //TODO
+        // Nothing to do
     }
 
     @Override
     public void register(String stream) {
-        this.streams.add(stream);
+        this.streams.put(stream, new ArrayList<PutRecordsRequestEntry>());
         if (this.autoCreate) {
             try {
                 if (KinesisUtils.checkOrCreate(stream, kinesis, numShards))
@@ -81,22 +81,42 @@ public class KinesisSystemProducer implements SystemProducer {
 
     @Override
     public void send(String source, OutgoingMessageEnvelope outgoingMessageEnvelope) {
-        PutRecordRequest putRecordRequest = new PutRecordRequest();
-        putRecordRequest.setStreamName(source);
-        //putRecordRequest.setData(ByteBuffer.wrap(String.format("testData-%d", createTime).getBytes()));
-        putRecordRequest.setData(ByteBuffer.wrap(outgoingMessageEnvelope.getMessage().toString().getBytes()));
-        //putRecordRequest.setPartitionKey(String.format("partitionKey-%d", cnt % NUM_SHARDS));
-        putRecordRequest.setPartitionKey(outgoingMessageEnvelope.getKey().toString());
-
-        PutRecordResult putRecordResult = kinesis.putRecord(putRecordRequest);
-        LOG.debug(String.format("Successfully put record, partition key : %s, ShardID : %s, SequenceNumber : %s.\n",
-                putRecordRequest.getPartitionKey(),
-                putRecordResult.getShardId(),
-                putRecordResult.getSequenceNumber()));
+        PutRecordsRequestEntry putRecordsRequestEntry = new PutRecordsRequestEntry();
+        // setting the key
+        putRecordsRequestEntry.setPartitionKey(outgoingMessageEnvelope.getKey().toString());
+        // setting the data
+        putRecordsRequestEntry.setData(ByteBuffer.wrap(outgoingMessageEnvelope.getMessage().toString().getBytes()));
+        this.streams.get(source).add(putRecordsRequestEntry);
     }
 
     @Override
-    public void flush(String s) {
-        //TODO
+    public void flush(String source) {
+        List<PutRecordsRequestEntry> putRecordsRequestEntryList = this.streams.get(source);
+        PutRecordsRequest putRecordsRequest = new PutRecordsRequest();
+        putRecordsRequest.setStreamName(source);
+        putRecordsRequest.setRecords(putRecordsRequestEntryList);
+        PutRecordsResult putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
+
+        if (putRecordsResult.getFailedRecordCount() > 0) {
+            LOG.warn("Number of records not flushed into Kinesis: " + putRecordsResult.getFailedRecordCount());
+            LOG.warn("Retrying to insert records");
+        }
+
+        // retry if errors
+        while (putRecordsResult.getFailedRecordCount() > 0) {
+            final List<PutRecordsRequestEntry> failedRecordsList = new ArrayList<>();
+            final List<PutRecordsResultEntry> putRecordsResultEntryList = putRecordsResult.getRecords();
+            LOG.debug("Retrying for " + putRecordsResultEntryList.size() + " records.");
+            for (int i = 0; i < putRecordsResultEntryList.size(); i++) {
+                final PutRecordsRequestEntry putRecordRequestEntry = putRecordsRequestEntryList.get(i);
+                final PutRecordsResultEntry putRecordsResultEntry = putRecordsResultEntryList.get(i);
+                if (putRecordsResultEntry.getErrorCode() != null) {
+                    failedRecordsList.add(putRecordRequestEntry);
+                }
+            }
+            putRecordsRequestEntryList = failedRecordsList;
+            putRecordsRequest.setRecords(putRecordsRequestEntryList);
+            putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
+        }
     }
 }
