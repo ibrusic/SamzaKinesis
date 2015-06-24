@@ -25,10 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.amazonaws.services.kinesis.samza.KinesisUtils.getClient;
 import static com.amazonaws.services.kinesis.samza.Constants.*;
@@ -43,12 +40,14 @@ public class KinesisSystemProducer implements SystemProducer {
     private AmazonKinesisClient kinesis;
     private final boolean autoCreate;
     private final int numShards;
+    private final String streamName;
 
     public KinesisSystemProducer(String systemName, Config config) {
         String credentialsPath = config.get(String.format("systems.%s.%s", systemName, CONFIG_PATH_PARAM));
         String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));
         this.autoCreate = config.getBoolean(String.format("systems.%s.%s", systemName, AUTO_CREATE_STREAM), false);
         this.numShards = config.getInt(String.format("systems.%s.%s", systemName, NUMBER_SHARD), DEFAULT_NUM_SHARDS);
+        this.streamName = config.get(String.format("systems.%s.%s", systemName, STREAM_NAME_PARAM));
         this.kinesis = getClient(credentialsPath, region);
         this.streams = new HashMap<>();
     }
@@ -65,7 +64,7 @@ public class KinesisSystemProducer implements SystemProducer {
 
     @Override
     public void register(String stream) {
-        this.streams.put(stream, new ArrayList<PutRecordsRequestEntry>());
+        this.streams.put(stream, new LinkedList<PutRecordsRequestEntry>());
         if (this.autoCreate) {
             try {
                 if (KinesisUtils.checkOrCreate(stream, kinesis, numShards))
@@ -83,40 +82,48 @@ public class KinesisSystemProducer implements SystemProducer {
     public void send(String source, OutgoingMessageEnvelope outgoingMessageEnvelope) {
         PutRecordsRequestEntry putRecordsRequestEntry = new PutRecordsRequestEntry();
         // setting the key
-        putRecordsRequestEntry.setPartitionKey(outgoingMessageEnvelope.getKey().toString());
+        putRecordsRequestEntry.setPartitionKey(new String((byte[]) outgoingMessageEnvelope.getKey()));
         // setting the data
-        putRecordsRequestEntry.setData(ByteBuffer.wrap(outgoingMessageEnvelope.getMessage().toString().getBytes()));
+        putRecordsRequestEntry.setData(ByteBuffer.wrap((byte[]) outgoingMessageEnvelope.getMessage()));
+        // adding it to be flushed later on
         this.streams.get(source).add(putRecordsRequestEntry);
     }
 
     @Override
     public void flush(String source) {
-        List<PutRecordsRequestEntry> putRecordsRequestEntryList = this.streams.get(source);
-        PutRecordsRequest putRecordsRequest = new PutRecordsRequest();
-        putRecordsRequest.setStreamName(source);
-        putRecordsRequest.setRecords(putRecordsRequestEntryList);
-        PutRecordsResult putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
+        List<PutRecordsRequestEntry> putRequestsEntryList = this.streams.get(source);
+        // if there are requests to be flushed
+        if (putRequestsEntryList.size() > 0) {
+            LOG.debug("Flushing " + putRequestsEntryList.size() + " records.");
+            PutRecordsRequest putRecordsRequest = new PutRecordsRequest();
+            putRecordsRequest.setStreamName(this.streamName);
+            putRecordsRequest.setRecords(putRequestsEntryList);
+            PutRecordsResult putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
 
-        if (putRecordsResult.getFailedRecordCount() > 0) {
-            LOG.warn("Number of records not flushed into Kinesis: " + putRecordsResult.getFailedRecordCount());
-            LOG.warn("Retrying to insert records");
-        }
-
-        // retry if errors
-        while (putRecordsResult.getFailedRecordCount() > 0) {
-            final List<PutRecordsRequestEntry> failedRecordsList = new ArrayList<>();
-            final List<PutRecordsResultEntry> putRecordsResultEntryList = putRecordsResult.getRecords();
-            LOG.debug("Retrying for " + putRecordsResultEntryList.size() + " records.");
-            for (int i = 0; i < putRecordsResultEntryList.size(); i++) {
-                final PutRecordsRequestEntry putRecordRequestEntry = putRecordsRequestEntryList.get(i);
-                final PutRecordsResultEntry putRecordsResultEntry = putRecordsResultEntryList.get(i);
-                if (putRecordsResultEntry.getErrorCode() != null) {
-                    failedRecordsList.add(putRecordRequestEntry);
-                }
+            // checking if there were failed requests
+            if (putRecordsResult.getFailedRecordCount() > 0) {
+                LOG.warn("Number of records not flushed into Kinesis: " + putRecordsResult.getFailedRecordCount());
+                LOG.warn("Retrying to insert records");
             }
-            putRecordsRequestEntryList = failedRecordsList;
-            putRecordsRequest.setRecords(putRecordsRequestEntryList);
-            putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
+
+            // retry if errors
+            while (putRecordsResult.getFailedRecordCount() > 0) {
+                final List<PutRecordsRequestEntry> failedRecordsList = new ArrayList<>();
+                final List<PutRecordsResultEntry> putRecordsResultEntryList = putRecordsResult.getRecords();
+                LOG.debug("Retrying for " + putRecordsResultEntryList.size() + " records.");
+                for (int i = 0; i < putRecordsResultEntryList.size(); i++) {
+                    final PutRecordsRequestEntry putRecordRequestEntry = putRequestsEntryList.get(i);
+                    final PutRecordsResultEntry putRecordsResultEntry = putRecordsResultEntryList.get(i);
+                    if (putRecordsResultEntry.getErrorCode() != null) {
+                        failedRecordsList.add(putRecordRequestEntry);
+                    }
+                }
+                putRequestsEntryList = failedRecordsList;
+                putRecordsRequest.setRecords(putRequestsEntryList);
+                putRecordsResult = this.kinesis.putRecords(putRecordsRequest);
+            }
+            // clearing the to-be-flushed list
+            this.streams.put(source, new LinkedList<PutRecordsRequestEntry>());
         }
     }
 }

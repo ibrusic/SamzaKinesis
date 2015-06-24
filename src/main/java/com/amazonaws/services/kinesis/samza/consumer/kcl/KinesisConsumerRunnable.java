@@ -221,9 +221,6 @@ public class KinesisConsumerRunnable implements Runnable {
                 AWSCredentialsProvider credentialsProvider = this.credentialsProvider == null ? new DefaultAWSCredentialsProviderChain()
                         : this.credentialsProvider;
 
-                LOG.info("Using credentials with Access Key ID: "
-                        + credentialsProvider.getCredentials().getAWSAccessKeyId());
-
                 config = new KinesisClientLibConfiguration(appName, streamName,
                         credentialsProvider, workerId).withInitialPositionInStream(streamPosition).withKinesisEndpoint(
                         kinesisEndpoint);

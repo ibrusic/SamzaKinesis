@@ -57,7 +57,7 @@ public class ImplKinesisRecordProcessor extends AbstractKinesisRecordProcessor {
             IncomingMessageEnvelope envelope = new IncomingMessageEnvelope(
                     stream, Long.toString(((UserRecord) record)
                     .getSubSequenceNumber()), key, data);
-            System.out.println(String.format("Processing Key:%s  - Value:%s", new String(key), new String(data)));
+            LOG.debug(String.format("Processing Key:%s  - Value:%s", new String(key), new String(data)));
             consumer.putMessage(this, envelope);
         }
 

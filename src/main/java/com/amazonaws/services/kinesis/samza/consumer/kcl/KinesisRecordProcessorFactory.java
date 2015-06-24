@@ -32,7 +32,7 @@ public class KinesisRecordProcessorFactory implements IRecordProcessorFactory {
     private AbstractKinesisRecordProcessor managedProcessor;
 
     public KinesisRecordProcessorFactory(AbstractKinesisRecordProcessor managedProcessor) {
-        System.out.println("Factory created");
+        LOG.debug("Factory created");
         this.managedProcessor = managedProcessor;
     }
 
@@ -40,7 +40,7 @@ public class KinesisRecordProcessorFactory implements IRecordProcessorFactory {
      * {@inheritDoc}
      */
     public IRecordProcessor createProcessor() {
-        System.out.println("Creating processor");
+        LOG.debug("Creating processor");
         try {
 
             LOG.info("Creating new Managed Client Processor");
