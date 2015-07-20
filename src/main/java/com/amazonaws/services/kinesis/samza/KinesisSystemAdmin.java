@@ -1,9 +1,8 @@
 package com.amazonaws.services.kinesis.samza;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
+import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.StreamDescription;
 import org.apache.samza.Partition;
 import org.apache.samza.config.Config;
@@ -33,9 +32,6 @@ import static com.amazonaws.services.kinesis.samza.Constants.CONFIG_PATH_PARAM;
  */
 public class KinesisSystemAdmin implements SystemAdmin {
 
-    // Number of containers is yarn-specific, it will have to reviewed
-//    private static final String CONTAINER_COUNT_CONFIG = "yarn.container.count";
-
     // TODO can we define partition metadata meaningfully for Kinesis?
     // (This would be needed to detect whether a stream has caught up to the head --
     // i.e. bootstrap streams)
@@ -43,7 +39,7 @@ public class KinesisSystemAdmin implements SystemAdmin {
             new SystemStreamPartitionMetadata(null, null, null);
     // Credentials for determining the number of shards
     private final String credentialsPath;
-    // Region where the streams reside TODO different streams might be in different regions
+    // Region where the streams reside
     private final String region;
 
     /**
@@ -62,7 +58,7 @@ public class KinesisSystemAdmin implements SystemAdmin {
 
         for (String streamName : streamNames) {
             // Get the number of shards
-            int numShards = setShardNumber(streamName,credentialsPath,region);
+            int numShards = getShardNumber(streamName, credentialsPath, region);
             if (numShards > 0) {
                 // Create Metadata for each shard found
                 Map<Partition, SystemStreamPartitionMetadata> partitionMeta =
@@ -72,7 +68,7 @@ public class KinesisSystemAdmin implements SystemAdmin {
                 }
                 metadata.put(streamName, new SystemStreamMetadata(streamName, partitionMeta));
             } else {
-                throw new IllegalArgumentException(streamName + " has no shards");
+                throw new IllegalArgumentException(streamName + " has no shards!");
             }
         }
         return metadata;
@@ -96,7 +92,7 @@ public class KinesisSystemAdmin implements SystemAdmin {
      * Gets the number of shards a Kinesis stream has.
      * @param streamName
      */
-    private int setShardNumber(String streamName, String credentialsPath, String region) {
+    private int getShardNumber(String streamName, String credentialsPath, String region) {
         int numShards = 0;
         StreamDescription descriptionStream = KinesisUtils.getDescriptionStream(streamName, credentialsPath, region);
         if (descriptionStream != null) {

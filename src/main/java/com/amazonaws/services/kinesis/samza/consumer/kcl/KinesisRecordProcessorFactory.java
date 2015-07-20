@@ -42,7 +42,6 @@ public class KinesisRecordProcessorFactory implements IRecordProcessorFactory {
     public IRecordProcessor createProcessor() {
         LOG.debug("Creating processor");
         try {
-
             LOG.info("Creating new Managed Client Processor");
             AbstractKinesisRecordProcessor p = this.managedProcessor.copy();
             createdProcessors.put(p.toString(), p);

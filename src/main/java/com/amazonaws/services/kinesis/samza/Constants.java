@@ -40,6 +40,9 @@ public class Constants {
      * Position in the AWS stream from where we start consuming
      */
     public static final String STREAM_POSITION_PARAM = "position-in-stream";
+    public static final String SEQUENCE_NUMBER_PARAM = "sequence-number";
+    public static final String SEQUENCE_NUMBER_SUFFIX = "SEQUENCE_NUMBER";
+    public static final String SHARDID_PREFFIX = "shardId-%012d";
 
     /**
      * Aws region parameter

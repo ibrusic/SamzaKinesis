@@ -34,8 +34,6 @@ import static com.amazonaws.services.kinesis.samza.Constants.DEFAULT_MAX_RECORDS
  * Runnable class to consumer from Kinesis.
  */
 public class KinesisConsumerRunnable implements Runnable {
-//    private static final String version = ".9.0";
-
     /**
      * Logger for KinesisConsumerRunnable
      */
@@ -132,7 +130,7 @@ public class KinesisConsumerRunnable implements Runnable {
         int exitCode = 0;
         int failures = 0;
 
-        // Configure KLC options and worker properties
+        // Configure KCL options and worker properties
         configure();
         LOG.info(String.format("Running %s to process stream %s", appName, streamName));
         IRecordProcessorFactory recordProcessorFactory = new KinesisRecordProcessorFactory(this.templateProcessor);

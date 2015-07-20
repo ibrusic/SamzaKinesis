@@ -1,32 +1,34 @@
 package com.amazonaws.services.kinesis.samza.consumer;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.services.kinesis.AmazonKinesisClient;
+import com.amazonaws.services.kinesis.model.*;
 import com.amazonaws.services.kinesis.samza.KinesisUtils;
-import com.amazonaws.services.kinesis.samza.consumer.kcl.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
-import org.apache.samza.system.SystemConsumer;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.amazonaws.services.kinesis.samza.Constants.*;
 
 /**
- * Implements the Samza {@link SystemConsumer} interface using a queue. The
- * Kinesis client library threads add messages to the queue, and the Samza
- * container thread reads messages off the queue.
+ * Implements the Samza {@link org.apache.samza.system.SystemConsumer} interface using a queue.
+ * The low level Amazon Kinesis API is used to allow Samza to control fail-recovery and container
+ * mapping better messages and tasks.
  */
 public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     /**
      * AWS credentials
      */
-    private static AWSCredentialsProvider credentials;
+    private static AmazonKinesisClient kClient;
     /**
      * App name
      */
@@ -47,30 +49,13 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * Initial Kinesis stream position
      */
     private String initialPos;
-
-    /**
-     * One processor per Samza partition (and since we try to use one partition per
-     * container, this map is normally expected to have one entry). This processor
-     * is copied every time a new shard is started.
-     */
-    private Map<SystemStreamPartition, AbstractKinesisRecordProcessor> templateProcessors =
-            new HashMap<SystemStreamPartition, AbstractKinesisRecordProcessor>();
-
-    /**
-     * One processor per Kinesis shard that we start consuming. Key is shardId.
-     */
-    private Map<String, AbstractKinesisRecordProcessor> processors =
-            new HashMap<String, AbstractKinesisRecordProcessor>();
+    private String sequenceNumber;
 
     /**
      * Message sequence numbers delivered per partition since the last checkpoint.
      */
     private Map<SystemStreamPartition, Queue<Delivery>> deliveries =
             new ConcurrentHashMap<>();
-    /**
-     * Map for relating each SSP to the created threads
-     */
-    private Map<SystemStreamPartition, Thread> threads = new HashMap<SystemStreamPartition, Thread>();
 
     /**
      * Constructor
@@ -81,21 +66,21 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     public KinesisSystemConsumer(String systemName, Config config) {
         String awsCredentialsPath = config.get(String.format("systems.%s.%s", systemName, CONFIG_PATH_PARAM));
         String iniPos = config.get(String.format("systems.%s.%s", systemName, STREAM_POSITION_PARAM));
+        //TODO not yet used
+        String seqNumber = config.get(String.format("systems.%s.%s", systemName, SEQUENCE_NUMBER_PARAM));
         String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));
         String appName = config.get("job.name");
         this.systemName = systemName;
         this.appName = appName;
         this.initialPos = iniPos;
+        this.sequenceNumber = seqNumber;
         this.region = region.toUpperCase();
-        this.credentials = KinesisUtils.loadAwsCredentials(awsCredentialsPath);
+        this.kClient = KinesisUtils.getKinesisClient(awsCredentialsPath, region);
     }
 
     /**
-     * We assume here that each container consumes only one "partition" of the
-     * input stream, where "partition" has been artificially set up in
-     * {@link com.amazonaws.services.kinesis.samza.KinesisSystemAdmin} to be mapped 1:1 to Samza containers. Each
-     * partition may actually involve consuming multiple shards, but that is
-     * handled by the Kinesis client library.
+     * Each partition involves a single shard so Samza is still in control on
+     * how to do fail-recovery and re-tries
      * <p/>
      * If the Samza job has multiple input streams, this method is called once
      * for each input stream.
@@ -103,99 +88,55 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     @Override
     public void register(SystemStreamPartition systemStreamPartition, String offset) {
         super.register(systemStreamPartition, offset);
-        AbstractKinesisRecordProcessor processor = new ImplKinesisRecordProcessor(systemStreamPartition, this);
-        this.templateProcessors.put(systemStreamPartition, processor);
+
+        String partId = String.valueOf(systemStreamPartition.getPartition().getPartitionId());
+        GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
+        getShardIteratorRequest.setStreamName(systemStreamPartition.getStream());
+        getShardIteratorRequest.setShardId(SHARDID_PREFFIX.format(partId));
+        getShardIteratorRequest.setShardIteratorType(initialPos);
+        if (!sequenceNumber.isEmpty() && initialPos.endsWith(SEQUENCE_NUMBER_SUFFIX))
+            getShardIteratorRequest.setStartingSequenceNumber(sequenceNumber);
+
+        GetShardIteratorResult getShardIteratorResult = kClient.getShardIterator(getShardIteratorRequest);
+        // initial shardIterator value
+        shardIterator = getShardIteratorResult.getShardIterator();
     }
 
-    /**
-     * Start up a thread for each Kinesis stream to be consume.
-     */
+    String shardIterator;
+
     @Override
     public void start() {
-        for (Map.Entry<SystemStreamPartition, AbstractKinesisRecordProcessor> entry : templateProcessors.entrySet()) {
-                    createKinesisConsumerThread(entry.getKey(), entry.getKey().getStream(), entry.getValue());
+        // Continuously read data records from a shard
+        List<Record> records;
+
+        while (!stopFlg) {
+
+            // Create a new getRecordsRequest with an existing shardIterator
+            // Set the maximum records to return to 25
+            GetRecordsRequest getRecordsRequest = new GetRecordsRequest();
+            getRecordsRequest.setShardIterator(shardIterator);
+            getRecordsRequest.setLimit(25);
+
+            GetRecordsResult result = kClient.getRecords(getRecordsRequest);
+
+            // Put the result into record list. The result can be empty.
+            records = result.getRecords();
+
+            try {
+                Thread.sleep(1000);
+            }
+            catch (InterruptedException exception) {
+                throw new RuntimeException(exception);
+            }
+
+            shardIterator = result.getNextShardIterator();
         }
     }
 
-    /**
-     * Creates Kinesis consumer thread
-     *
-     * @param ssp
-     * @param streamName
-     * @param processor
-     */
-    private void createKinesisConsumerThread(SystemStreamPartition ssp, String streamName, AbstractKinesisRecordProcessor processor) {
-        LOG.info(String.format("Thread created for partition %s ", ssp.toString()));
-        KinesisConsumerRunnable consumer = new KinesisConsumerRunnable(this.appName,
-                streamName, processor, this.initialPos).withCredentialsProvider(credentials).withRegionName(region);
-        Thread thread = new Thread(consumer);
-        thread.start();
-        threads.put(ssp, thread);
-    }
-
+    private boolean stopFlg = false;
     @Override
     public void stop() {
-        // TODO Make this more graceful. Perhaps KinesisConsumerRunnable should expose
-        // Worker.shutdown() to us.
-        for (Thread thread : threads.values())
-            thread.interrupt();
-    }
-
-//    /**
-//     * Translates a Samza checkpoint into Kinesis Client Library checkpoints.
-//     */
-//    public synchronized void checkpoint(Checkpoint checkpoint) throws Exception {
-//        for (Map.Entry<SystemStreamPartition, String> entry : checkpoint.getOffsets().entrySet()) {
-//            Queue<Delivery> queue = deliveries.get(entry.getKey());
-//            if (queue == null) continue;
-//
-//            HashMap<SamzaPushKinesisClientProcessor, String> latestSeqNos =
-//                    new HashMap<SamzaPushKinesisClientProcessor, String>();
-//            Delivery delivery;
-//
-//            // Go through the history of messages delivered since the last checkpoint.
-//            // Find the most recent sequence number for each processor. Stop when
-//            // either the queue is empty or the current checkpoint is reached.
-//            while (true) {
-//                delivery = queue.poll();
-//                if (delivery == null) break;
-//                latestSeqNos.put(delivery.processor, delivery.sequenceNumber);
-//                if (delivery.sequenceNumber.equals(entry.getValue())) break;
-//            }
-//
-//            for (Map.Entry<SamzaPushKinesisClientProcessor, String> seqNo : latestSeqNos.entrySet()) {
-//                seqNo.getKey().checkpoint(seqNo.getValue());
-//            }
-//        }
-//    }
-
-    /**
-     * Called by a SamzaPushKinesisClientProcessor when it starts consuming
-     * messages from a new Kinesis shard. (Each shard gets its own processor
-     * instance.)
-     *
-     * @param shardId   Kinesis identifier of the shard that's being consumed.
-     * @param processor IRecordProcessor instance for that shard.
-     */
-    public void registerProcessor(String shardId, AbstractKinesisRecordProcessor processor) {
-        processors.put(shardId, processor);
-    }
-
-    /**
-     * Called by an implementation of AbstractKinesisRecordProcessor when a message has been
-     * received from an incoming Kinesis stream. The message is put on a queue,
-     * and the Samza container will pick it up from there when polling for new
-     * messages.
-     */
-    public void putMessage(AbstractKinesisRecordProcessor kinesisRecordProcessor, IncomingMessageEnvelope envelope) {
-        // keeping track of received messages
-        this.trackDeliveries(kinesisRecordProcessor, envelope);
-        // getting the message ready for Samza
-        try {
-            put(envelope.getSystemStreamPartition(), envelope);
-        } catch (InterruptedException e) {
-            LOG.info("Interrupted while enqueueing message", e);
-        }
+        stopFlg = true;
     }
 
     /**
@@ -204,7 +145,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      * @param processor
      * @param envelope
      */
-    private void trackDeliveries(AbstractKinesisRecordProcessor processor, IncomingMessageEnvelope envelope) {
+    private void trackDeliveries(KinesisShardReader processor, IncomingMessageEnvelope envelope) {
         if (!deliveries.containsKey(envelope.getSystemStreamPartition())) {
             deliveries.put(envelope.getSystemStreamPartition(), new ConcurrentLinkedQueue<Delivery>());
         }
@@ -214,7 +155,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
     }
 
     /**
-     * Class to map between the sequenceNumbers obtained and the processors that did
+     * Class to map between the sequenceNumbers obtained and the processors that got them
      */
     private static class Delivery {
         /**
@@ -222,9 +163,9 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
          */
         private final String sequenceNumber;
         /**
-         * Kinesis record processor
+         * Kinesis shard reader
          */
-        private final AbstractKinesisRecordProcessor processor;
+        private final KinesisShardReader processor;
 
         /**
          * Constructor
@@ -232,7 +173,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
          * @param sequenceNumber
          * @param processor
          */
-        public Delivery(String sequenceNumber, AbstractKinesisRecordProcessor processor) {
+        public Delivery(String sequenceNumber, KinesisShardReader processor) {
             this.sequenceNumber = sequenceNumber;
             this.processor = processor;
         }

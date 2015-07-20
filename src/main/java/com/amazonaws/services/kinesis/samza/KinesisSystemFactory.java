@@ -3,8 +3,8 @@ package com.amazonaws.services.kinesis.samza;
 import java.util.HashMap;
 
 import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumerPrev;
 import com.amazonaws.services.kinesis.samza.producer.KinesisSystemProducer;
-import org.apache.samza.SamzaException;
 import org.apache.samza.config.Config;
 import org.apache.samza.metrics.MetricsRegistry;
 import org.apache.samza.system.SystemAdmin;
@@ -13,13 +13,7 @@ import org.apache.samza.system.SystemFactory;
 import org.apache.samza.system.SystemProducer;
 
 /**
- * Reference this factory class in your Samza job config to consume Kinesis streams
- * in your job. Example:
- * 
- * <pre>
- * systems.kinesis.samza.factory=com.amazonaws.services.kinesis.samza.KinesisSystemFactory
- * task.inputs=kinesis.stream-name
- * </pre>
+ * Kinesis System factory
  */
 public class KinesisSystemFactory implements SystemFactory {
 
@@ -38,11 +32,12 @@ public class KinesisSystemFactory implements SystemFactory {
         return consumer;
     }
 
+    //TODO check metrics
+    //TODO serialization
     @Override
     public SystemProducer getProducer(String systemName, Config config, MetricsRegistry registry) {
         KinesisSystemProducer producer = new KinesisSystemProducer(systemName, config);
         return producer;
-        //throw new SamzaException("Sending messages to Kinesis is not yet supported");
     }
 
     /**

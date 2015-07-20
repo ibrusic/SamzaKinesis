@@ -3,7 +3,7 @@ package samza.consumer;
 import com.amazonaws.auth.PropertiesFileCredentialsProvider;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumerPrev;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.ImplKinesisRecordProcessor;
 import com.amazonaws.services.kinesis.samza.consumer.kcl.KinesisConsumerRunnable;
 import org.apache.samza.config.MapConfig;
@@ -35,7 +35,7 @@ public class KinesisSystemConsumerTest {
         MapConfig conf = new MapConfig(m);
         KinesisConsumerRunnable worker2 = new KinesisConsumerRunnable(SAMPLE_APPLICATION_NAME,
                 SAMPLE_APPLICATION_STREAM_NAME,
-                new ImplKinesisRecordProcessor(null, new KinesisSystemConsumer(SAMPLE_APPLICATION_NAME, conf)), "LATEST"
+                new ImplKinesisRecordProcessor(null, new KinesisSystemConsumerPrev(SAMPLE_APPLICATION_NAME, conf)), "LATEST"
         ).withCredentialsProvider(new PropertiesFileCredentialsProvider(path)).withRegionName(Regions.US_EAST_1.toString());
 
         Thread thread = new Thread(worker2);

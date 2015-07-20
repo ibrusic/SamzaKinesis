@@ -3,7 +3,7 @@ package com.amazonaws.services.kinesis.samza.consumer.kcl;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumerPrev;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamPartition;
 
@@ -36,7 +36,7 @@ public class ImplKinesisRecordProcessor extends AbstractKinesisRecordProcessor {
      * @param stream
      * @param consumer
      */
-    public ImplKinesisRecordProcessor(SystemStreamPartition stream, KinesisSystemConsumer consumer) {
+    public ImplKinesisRecordProcessor(SystemStreamPartition stream, KinesisSystemConsumerPrev consumer) {
         this.stream = stream;
         this.consumer = consumer;
     }

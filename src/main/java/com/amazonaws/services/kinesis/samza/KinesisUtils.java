@@ -11,6 +11,8 @@ import com.amazonaws.services.kinesis.model.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,12 +29,12 @@ public class KinesisUtils {
      * @return
      */
     public static StreamDescription getDescriptionStream(String streamName, String credentials, String region) {
-        AmazonKinesisClient kinesis = getClient(credentials, region);
+        AmazonKinesisClient kClient = getKinesisClient(credentials, region);
 
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest().withStreamName(streamName);
         StreamDescription streamDescription = null;
         try {
-            streamDescription = kinesis.describeStream(describeStreamRequest).getStreamDescription();
+            streamDescription = kClient.describeStream(describeStreamRequest).getStreamDescription();
             LOG.debug("Stream " + streamName + " has a status of " + streamDescription.getStreamStatus());
             LOG.debug("Stream " + streamName + " has " + streamDescription.getShards().size() + " shards.");
 
@@ -42,7 +44,7 @@ public class KinesisUtils {
 
             if (!"ACTIVE".equals(streamDescription.getStreamStatus())) {
                 LOG.warn("Wait for the stream to become active if it is not yet ACTIVE.");
-                waitForStreamToBecomeAvailable(streamName, kinesis);
+                waitForStreamToBecomeAvailable(streamName, kClient);
             }
         } catch (ResourceNotFoundException ex) {
             LOG.error("Stream " + streamName + " does not exist.");
@@ -55,10 +57,35 @@ public class KinesisUtils {
     }
 
     /**
-     * Verifies if a Kinesis stream exists or not, and creates it.
+     * Gets the shards available from a specific stream
      * @param streamName
      * @param credentials
      * @param region
+     * @return
+     */
+    public static List<Shard> getShardsStream(String streamName, String credentials, String region) {
+        DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
+        AmazonKinesisClient kClient = getKinesisClient(credentials, region);
+        describeStreamRequest.setStreamName( streamName );
+        List<Shard> shards = new ArrayList<>();
+        String exclusiveStartShardId = null;
+        do {
+            describeStreamRequest.setExclusiveStartShardId( exclusiveStartShardId );
+            DescribeStreamResult describeStreamResult = kClient.describeStream( describeStreamRequest );
+            shards.addAll( describeStreamResult.getStreamDescription().getShards() );
+            if (describeStreamResult.getStreamDescription().getHasMoreShards() && shards.size() > 0) {
+                exclusiveStartShardId = shards.get(shards.size() - 1).getShardId();
+            } else {
+                exclusiveStartShardId = null;
+            }
+        } while ( exclusiveStartShardId != null );
+        return shards;
+    }
+
+    /**
+     * Verifies if a Kinesis stream exists or not, and creates it.
+     * @param streamName
+     * @param kinesis
      * @param numShards
      * @return
      * @throws InterruptedException
@@ -102,7 +129,7 @@ public class KinesisUtils {
      * @param region
      * @return
      */
-    public static AmazonKinesisClient getClient(String credentialsPath, String region) {
+    public static AmazonKinesisClient getKinesisClient(String credentialsPath, String region) {
         AWSCredentialsProvider credentialsProvider = loadAwsCredentials(credentialsPath);
         AmazonKinesisClient kClient = new AmazonKinesisClient(credentialsProvider);
         kClient.configureRegion(Regions.valueOf(region.toUpperCase()));

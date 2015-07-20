@@ -12,7 +12,7 @@ package com.amazonaws.services.kinesis.samza.consumer.kcl;
 
 import java.util.List;
 
-import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
+import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumerPrev;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -41,7 +41,7 @@ public abstract class AbstractKinesisRecordProcessor implements IRecordProcessor
     private IRecordProcessorFactory createdByFactory;
 
     // Samza's consumer to send messages to
-    protected KinesisSystemConsumer consumer;
+    protected KinesisSystemConsumerPrev consumer;
 
     /**
      * {@inheritDoc}

@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static com.amazonaws.services.kinesis.samza.KinesisUtils.getClient;
+import static com.amazonaws.services.kinesis.samza.KinesisUtils.getKinesisClient;
 import static com.amazonaws.services.kinesis.samza.Constants.*;
 
 /**
@@ -48,10 +48,11 @@ public class KinesisSystemProducer implements SystemProducer {
         this.autoCreate = config.getBoolean(String.format("systems.%s.%s", systemName, AUTO_CREATE_STREAM), false);
         this.numShards = config.getInt(String.format("systems.%s.%s", systemName, NUMBER_SHARD), DEFAULT_NUM_SHARDS);
         this.streamName = config.get(String.format("systems.%s.%s", systemName, STREAM_NAME_PARAM));
-        this.kinesis = getClient(credentialsPath, region);
+        this.kinesis = getKinesisClient(credentialsPath, region);
         this.streams = new HashMap<>();
     }
 
+    //TODO unit test kinesis
     @Override
     public void start() {
         // Nothing to do
@@ -87,6 +88,9 @@ public class KinesisSystemProducer implements SystemProducer {
         putRecordsRequestEntry.setData(ByteBuffer.wrap((byte[]) outgoingMessageEnvelope.getMessage()));
         // adding it to be flushed later on
         this.streams.get(source).add(putRecordsRequestEntry);
+        // TODO check kafka flushing
+        if (this.streams.get(source).size() == 500 )
+            this.flush(source);
     }
 
     @Override
