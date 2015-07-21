@@ -1,6 +1,5 @@
 package com.amazonaws.services.kinesis.samza.consumer;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.model.*;
 import com.amazonaws.services.kinesis.samza.KinesisUtils;
@@ -10,12 +9,16 @@ import org.apache.samza.config.Config;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
+import org.apache.samza.util.DaemonThreadFactory;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static com.amazonaws.services.kinesis.samza.Constants.*;
 
@@ -25,6 +28,7 @@ import static com.amazonaws.services.kinesis.samza.Constants.*;
  * mapping better messages and tasks.
  */
 public class KinesisSystemConsumer extends BlockingEnvelopeMap {
+    private static final String KINESIS_CONSUMER_SYSTEM_THREAD_PREFIX = "kinesis-";
     /**
      * AWS credentials
      */
@@ -50,6 +54,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     private String initialPos;
     private String sequenceNumber;
+    private static Map<SystemStreamPartition, String> sspShardIteratorMap = new HashMap<>();
 
     /**
      * Message sequence numbers delivered per partition since the last checkpoint.
@@ -99,59 +104,82 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
 
         GetShardIteratorResult getShardIteratorResult = kClient.getShardIterator(getShardIteratorRequest);
         // initial shardIterator value
-        shardIterator = getShardIteratorResult.getShardIterator();
+        String shardIterator = getShardIteratorResult.getShardIterator();
+        sspShardIteratorMap.put(systemStreamPartition, shardIterator);
     }
 
-    String shardIterator;
+    private ExecutorService pool;
 
     @Override
     public void start() {
-        // Continuously read data records from a shard
-        List<Record> records;
-
-        while (!stopFlg) {
-
-            // Create a new getRecordsRequest with an existing shardIterator
-            // Set the maximum records to return to 25
-            GetRecordsRequest getRecordsRequest = new GetRecordsRequest();
-            getRecordsRequest.setShardIterator(shardIterator);
-            getRecordsRequest.setLimit(25);
-
-            GetRecordsResult result = kClient.getRecords(getRecordsRequest);
-
-            // Put the result into record list. The result can be empty.
-            records = result.getRecords();
-
-            try {
-                Thread.sleep(1000);
-            }
-            catch (InterruptedException exception) {
-                throw new RuntimeException(exception);
-            }
-
-            shardIterator = result.getNextShardIterator();
+        pool = Executors.newFixedThreadPool(sspShardIteratorMap.size(), new DaemonThreadFactory(KINESIS_CONSUMER_SYSTEM_THREAD_PREFIX));
+        for (Map.Entry<SystemStreamPartition, String> entry : sspShardIteratorMap.entrySet()) {
+            pool.execute(readShardRecords(entry.getKey(), entry.getValue()));
         }
     }
 
-    private boolean stopFlg = false;
+    private Runnable readShardRecords(final SystemStreamPartition ssp, final String iniShardIterator) {
+        Runnable runnable = new Runnable() {
+
+            volatile boolean continueFlg = true;
+
+            public void stop() {
+                continueFlg = false;
+            }
+
+            @Override
+            public void run() {
+                // Continuously read data records from a shard
+                List<Record> records;
+                String shardIterator = iniShardIterator;
+
+                while (continueFlg) {
+
+                    // Create a new getRecordsRequest with an existing shardIterator
+                    // Set the maximum records to return to 25
+                    GetRecordsRequest getRecordsRequest = new GetRecordsRequest();
+                    getRecordsRequest.setShardIterator(shardIterator);
+                    getRecordsRequest.setLimit(25);
+
+                    GetRecordsResult result = kClient.getRecords(getRecordsRequest);
+                    try {
+                        // Put the result into record list. The result can be empty.
+                        for (Record record : result.getRecords()) {
+                            IncomingMessageEnvelope envelope = new IncomingMessageEnvelope(ssp, record.getSequenceNumber(), record.getPartitionKey(), record.getData());
+                            put(ssp, envelope);
+                            trackDeliveries(Thread.currentThread().getName(), envelope);
+                        }
+                        // Waiting for more records
+                        Thread.sleep(1000);
+                    } catch (InterruptedException exception) {
+                        throw new RuntimeException(exception);
+                    }
+
+                    shardIterator = result.getNextShardIterator();
+                }
+            }
+        };
+        return runnable;
+    }
+
     @Override
     public void stop() {
-        stopFlg = true;
+        pool.shutdown();
     }
 
     /**
      * Method to help us keep track of messages delivered.
      *
-     * @param processor
+     * @param threadName
      * @param envelope
      */
-    private void trackDeliveries(KinesisShardReader processor, IncomingMessageEnvelope envelope) {
+    private void trackDeliveries(String threadName, IncomingMessageEnvelope envelope) {
         if (!deliveries.containsKey(envelope.getSystemStreamPartition())) {
             deliveries.put(envelope.getSystemStreamPartition(), new ConcurrentLinkedQueue<Delivery>());
         }
 
         Queue<Delivery> queue = deliveries.get(envelope.getSystemStreamPartition());
-        queue.add(new Delivery(envelope.getOffset(), processor));
+        queue.add(new Delivery(envelope.getOffset(), threadName));
     }
 
     /**
@@ -165,17 +193,17 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         /**
          * Kinesis shard reader
          */
-        private final KinesisShardReader processor;
+        private final String threadName;
 
         /**
          * Constructor
          *
          * @param sequenceNumber
-         * @param processor
+         * @param threadName
          */
-        public Delivery(String sequenceNumber, KinesisShardReader processor) {
+        public Delivery(String sequenceNumber, String threadName) {
             this.sequenceNumber = sequenceNumber;
-            this.processor = processor;
+            this.threadName = threadName;
         }
     }
 
