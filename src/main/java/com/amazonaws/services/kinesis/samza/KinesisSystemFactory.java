@@ -3,7 +3,6 @@ package com.amazonaws.services.kinesis.samza;
 import java.util.HashMap;
 
 import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumer;
-import com.amazonaws.services.kinesis.samza.consumer.KinesisSystemConsumerPrev;
 import com.amazonaws.services.kinesis.samza.producer.KinesisSystemProducer;
 import org.apache.samza.config.Config;
 import org.apache.samza.metrics.MetricsRegistry;

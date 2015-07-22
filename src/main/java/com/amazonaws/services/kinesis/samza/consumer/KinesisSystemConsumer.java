@@ -54,6 +54,7 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
      */
     private String initialPos;
     private String sequenceNumber;
+    private int requestRecords;
     private static Map<SystemStreamPartition, String> sspShardIteratorMap = new HashMap<>();
 
     /**
@@ -74,12 +75,15 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         //TODO not yet used
         String seqNumber = config.get(String.format("systems.%s.%s", systemName, SEQUENCE_NUMBER_PARAM));
         String region = config.get(String.format("systems.%s.%s", systemName, AWS_REGION_PARAM));
+        int reqRecords = config.getInt(String.format("systems.%s.%s", systemName, MAX_REQUEST_RECORDS_PARAM), 0);
         String appName = config.get("job.name");
+
         this.systemName = systemName;
         this.appName = appName;
         this.initialPos = iniPos;
-        this.sequenceNumber = seqNumber;
+        this.sequenceNumber = seqNumber!=null?seqNumber:"";
         this.region = region.toUpperCase();
+        this.requestRecords = reqRecords;
         this.kClient = KinesisUtils.getKinesisClient(awsCredentialsPath, region);
     }
 
@@ -99,8 +103,10 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
         getShardIteratorRequest.setStreamName(systemStreamPartition.getStream());
         getShardIteratorRequest.setShardId(SHARDID_PREFFIX.format(partId));
         getShardIteratorRequest.setShardIteratorType(initialPos);
-        if (!sequenceNumber.isEmpty() && initialPos.endsWith(SEQUENCE_NUMBER_SUFFIX))
+        if (!sequenceNumber.isEmpty() && initialPos.endsWith(SEQUENCE_NUMBER_SUFFIX)) {
+            LOG.warn("Reading stream from sequence number %s.".format(sequenceNumber));
             getShardIteratorRequest.setStartingSequenceNumber(sequenceNumber);
+        }
 
         GetShardIteratorResult getShardIteratorResult = kClient.getShardIterator(getShardIteratorRequest);
         // initial shardIterator value
@@ -136,10 +142,12 @@ public class KinesisSystemConsumer extends BlockingEnvelopeMap {
                 while (continueFlg) {
 
                     // Create a new getRecordsRequest with an existing shardIterator
-                    // Set the maximum records to return to 25
                     GetRecordsRequest getRecordsRequest = new GetRecordsRequest();
                     getRecordsRequest.setShardIterator(shardIterator);
-                    getRecordsRequest.setLimit(25);
+                    if (requestRecords > 0) {
+                        LOG.warn("Reading a maximum of %s records per request".format(String.valueOf(requestRecords)));
+                        getRecordsRequest.setLimit(requestRecords);
+                    }
 
                     GetRecordsResult result = kClient.getRecords(getRecordsRequest);
                     try {

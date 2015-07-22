@@ -26,6 +26,10 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,7 +43,15 @@ public class KinesisFeedStreamTask implements StreamTask {
   @Override
   public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) {
     Map<String, Object> outgoingMap = new HashMap<>();
-    outgoingMap.put(new String((byte[]) envelope.getKey()), new String((byte[])envelope.getMessage()));
+      Charset charset = Charset.forName("UTF-8");
+      CharsetDecoder decoder = charset.newDecoder();
+      String data = "";
+      try {
+          data = decoder.decode((ByteBuffer)envelope.getMessage()).toString().replace("Data", "Mapa");;
+      } catch (CharacterCodingException e) {
+          e.printStackTrace();
+      }
+    outgoingMap.put(envelope.getKey().toString(), data);
     collector.send(new OutgoingMessageEnvelope(OUTPUT_STREAM, outgoingMap));
   }
 }

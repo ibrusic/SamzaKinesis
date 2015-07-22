@@ -43,6 +43,7 @@ public class Constants {
     public static final String SEQUENCE_NUMBER_PARAM = "sequence-number";
     public static final String SEQUENCE_NUMBER_SUFFIX = "SEQUENCE_NUMBER";
     public static final String SHARDID_PREFFIX = "shardId-%012d";
+    public static final String MAX_REQUEST_RECORDS_PARAM = "max-request-records";
 
     /**
      * Aws region parameter
